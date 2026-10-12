@@ -1,0 +1,14 @@
+timezone: America/Chicago
+id_digits: 3
+rest_full_days: 60
+map: {center: [40.35, -89.13], zoom: 16}
+attachment_dirs: [attachments]
+series:
+  orange:
+    words: [orange, o, ewe, e]
+    emoji: [🟠, 🔶]
+    defaults: {species: sheep, sex: ewe}
+  blue:
+    words: [blue, b, wether, w]
+    emoji: [🔵]
+    defaults: {species: sheep, sex: wether}
