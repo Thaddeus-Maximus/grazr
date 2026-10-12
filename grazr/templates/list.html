@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_macros.html" import elink %}
+{% block title %}{{ etype|capitalize }}{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>{{ etype|capitalize }}</h1><span class="muted">{{ rows|length }} shown</span>
+  <div class="actions">
+    {% if etype == "paddocks" %}<a class="btn" href="/draw">Draw paddock</a>{% endif %}
+    <a class="btn primary" href="/create/{{ etype }}">New {{ etype[:-1] if etype.endswith("s") else etype }}</a>
+  </div>
+</div>
+<form class="row panel" method="get" style="margin-bottom:1rem">
+  {% if etype == "animals" and series %}
+  <select name="series"><option value="">all series</option>
+    {% for s in series %}<option {% if query.series == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+  {% endif %}
+  {% for k, v in filters.items() %}
+  <span class="badge">{{ k }} {{ "has a value" if v == "*" else "is empty" if v == "!" else "= " ~ v }}
+    <input type="hidden" name="{{ k }}" value="{{ v }}"></span>
+  {% endfor %}
+  <select id="fk"><option value="">filter by…</option>{% for k in all_fields %}<option>{{ k }}</option>{% endfor %}</select>
+  <input id="fv" placeholder="value, * = any, ! = empty" size="20">
+  <input type="hidden" name="cols" value="{{ cols|join(',') }}">
+  {% if etype in ("animals", "herds") %}
+  <label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="show" value="all" {% if show_all %}checked{% endif %}>
+    show {{ "animals that left" if etype == "animals" else "idle herds" }}</label>
+  {% endif %}
+  <button>Apply</button>
+  {% if filters or query.series %}<a href="/{{ etype }}">clear</a>{% endif %}
+  <span class="muted small" style="margin-left:auto">columns:
+    <select id="cols" multiple size="1" title="ctrl-click to choose columns">{% for k in all_fields %}<option {% if k in cols %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></span>
+</form>
+
+<form method="post" action="/move-animals">
+<input type="hidden" name="next" value="/animals">
+<table>
+  <tr>
+    {% if etype == "animals" %}<th><input type="checkbox" data-check-all="input[name=animal]"></th>{% endif %}
+    <th>ID</th>
+    {% if etype == "animals" %}<th>Herd</th>{% elif etype == "herds" %}<th>Size</th><th>On</th>{% elif etype == "paddocks" %}<th>Acres</th><th>Rested</th><th>Herds</th>{% endif %}
+    {% for c in cols %}<th>{{ c }}</th>{% endfor %}
+  </tr>
+  {% for r in rows %}{% set f = fields(r) %}{% set x = extra.get(r.id, {}) %}
+  <tr>
+    {% if etype == "animals" %}<td><input type="checkbox" name="animal" value="{{ r.id }}"></td>{% endif %}
+    <td>{{ elink(r.id) }}{% if r.left_on %} <span class="badge left">left</span>{% endif %}</td>
+    {% if etype == "animals" %}<td>{% if x.herd %}{{ elink(x.herd) }}{% endif %}</td>
+    {% elif etype == "herds" %}<td>{{ x.size if x.size is not none else "" }}{% if r.anonymous %} head{% endif %}</td>
+      <td>{% for p in x.paddocks %}{{ elink(p) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+    {% elif etype == "paddocks" %}<td>{{ r.acres|acres }}</td><td>{{ x.rest|days if r.acres else "" }}</td>
+      <td>{% for h in x.herds %}{{ elink(h) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>{% endif %}
+    {% for c in cols %}<td>{% set v = f.get(c) %}{% if v is string %}{{ v|inline }}{% elif v is not none %}{{ v }}{% endif %}</td>{% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+{% if etype == "animals" and rows %}
+<div class="row" style="margin-top:.6rem">
+  Move checked to <input name="dest" list="herdlist" placeholder="herd" required>
+  <datalist id="herdlist">{% for h in app.farm.entities("herds") %}<option value="{{ h.id }}">{% endfor %}</datalist>
+  <label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="create" value="1"> create it if new</label>
+  <input name="when" type="datetime-local" title="when (blank = now)">
+  <button class="primary">Move</button>
+</div>
+{% endif %}
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelector("form.row").addEventListener("submit", (ev) => {
+  const k = document.getElementById("fk").value, v = document.getElementById("fv").value.trim();
+  const form = ev.target;
+  if (k) { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v || "*"; form.appendChild(i); }
+  const cols = [...document.getElementById("cols").selectedOptions].map((o) => o.value);
+  form.querySelector("input[name=cols]").value = cols.join(",");
+});
+</script>
+{% endblock %}

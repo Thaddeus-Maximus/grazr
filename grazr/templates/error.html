@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block main %}
+<h1>{{ title }}</h1>
+{% if "\n" in message %}<pre>{{ message }}</pre>{% else %}<p>{{ message }}</p>{% endif %}
+<p><a href="javascript:history.back()">Back</a></p>
+{% endblock %}

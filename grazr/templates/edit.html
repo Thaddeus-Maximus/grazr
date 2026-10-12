@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ e.id }}{% endblock %}
+{% block main %}
+<h1>{{ e.id }} <span class="muted">properties</span></h1>
+<p class="muted small">Only the frontmatter is rewritten; the rest of {{ e.path }} is kept, even if Obsidian changed it.
+  Links are written <code>[[like this]]</code>. An empty value removes the field.</p>
+<form method="post" action="/edit/{{ e.id|q }}" class="panel" style="max-width:52rem">
+  <div class="kv" id="kv">
+    {% for k, v in props.items() %}
+    <input name="key" value="{{ k }}" readonly>
+    <input name="value" value="{{ app.display_value(v) }}">
+    <label class="row small" style="margin:0;font-weight:normal"><input type="checkbox" name="remove" value="{{ k }}"> remove</label>
+    {% endfor %}
+    {% for i in range(3) %}
+    <input name="key" list="fieldnames" placeholder="new field"><input name="value" placeholder="value"><span></span>
+    {% endfor %}
+  </div>
+  <datalist id="fieldnames">{% for k in field_names %}{% if k not in props %}<option value="{{ k }}">{% endif %}{% endfor %}</datalist>
+  <div class="row" style="margin-top:.8rem">
+    <button class="primary">Save</button>
+    <a href="{{ e.id|eurl }}">Cancel</a>
+    <a style="margin-left:auto" href="/n/{{ e.path|q }}?edit=1">Edit the whole file</a>
+  </div>
+</form>
+{% endblock %}

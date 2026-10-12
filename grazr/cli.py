@@ -75,6 +75,44 @@ def cmd_geojson(args):
     return 0
 
 
+def cmd_server(args):
+    from .server import run
+    run(data_root(args.root), host=args.host, port=args.port)
+    return 0
+
+
+def cmd_tiles(args):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from . import tiles
+    farm = _farm(args)
+    cfg = farm.config
+    t = cfg["tiles"] or {}
+    zmin, zmax = int(t.get("min_zoom", 13)), int(t.get("max_zoom", 19))
+    if args.zoom:
+        lo, _, hi = args.zoom.partition("-")
+        zmin, zmax = int(lo), int(hi or lo)
+    polys = [c.parsed.perimeter for c in farm.index.cache.values()
+             if c.kind == "entity" and c.etype == "paddocks" and c.parsed.perimeter]
+    bounds = tiles.bounds_for(polys, cfg["map"]["center"], args.margin)
+    todo = list(tiles.plan(bounds, zmin, zmax))
+    print(f"{len(todo)} tiles, zoom {zmin}-{zmax}, "
+          f"bounds {bounds[0]:.5f},{bounds[1]:.5f} to {bounds[2]:.5f},{bounds[3]:.5f}")
+    if len(todo) > 20000 and not args.yes:
+        print("that's a lot of tiles; narrow --zoom or pass --yes")
+        return 1
+    source = t.get("source", "usgs-imagery")
+    done = failed = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for ok in pool.map(lambda zxy: tiles.fetch(farm.root, source, *zxy) is not None, todo):
+            done += 1
+            failed += not ok
+            if done % 100 == 0 or done == len(todo):
+                print(f"\r{done}/{len(todo)} ({failed} failed)", end="", flush=True)
+    print()
+    return 0 if not failed else 1
+
+
 def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -95,6 +133,15 @@ def main(argv=None):
     p.add_argument("paths", nargs="*")
     p.add_argument("--apply", action="store_true")
     p.set_defaults(fn=cmd_migrate)
+    p = sub.add_parser("server", help="run the web UI")
+    p.add_argument("--port", type=int, default=8714)
+    p.add_argument("--host", default="127.0.0.1")
+    p.set_defaults(fn=cmd_server)
+    p = sub.add_parser("tiles", help="download map imagery for offline use")
+    p.add_argument("--zoom", help="e.g. 13-19 (default from grazr.yaml)")
+    p.add_argument("--margin", type=float, default=300, help="metres around the paddocks")
+    p.add_argument("--yes", action="store_true", help="don't stop at 20,000 tiles")
+    p.set_defaults(fn=cmd_tiles)
     p = sub.add_parser("geojson", help="export paddocks as a GeoJSON FeatureCollection")
     p.add_argument("-o", "--output")
     p.set_defaults(fn=cmd_geojson)

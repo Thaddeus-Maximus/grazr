@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}New {{ etype }}{% endblock %}
+{% block main %}
+{% set noun = etype[:-1] if etype.endswith("s") else etype %}
+<h1>New {{ noun }}</h1>
+<form method="post" action="/create/{{ etype }}" class="panel" style="max-width:44rem">
+  {% if etype == "animals" %}
+  <label>Tag</label>
+  <div class="row">
+    <select name="series" id="series">
+      <option value="">untagged (give it a name)</option>
+      {% for s in series %}<option value="{{ s.name }}" data-next="{{ nexts[s.name] }}">{{ s.name }}</option>{% endfor %}
+    </select>
+    <input name="number" id="number" type="number" min="1" placeholder="number" style="width:7rem">
+    <input name="name" id="name" placeholder="name, e.g. Ram">
+  </div>
+  <p class="muted small">Numbers are never reused in a series; the next free one is filled in. The series' defaults (species, sex) are added.</p>
+  <div class="row">
+    <div><label for="born">Born</label><input id="born" name="born" type="date"></div>
+    <div><label for="dam">Dam</label><input id="dam" name="dam" list="animals" placeholder="orange-117"></div>
+    <div><label for="sire">Sire</label><input id="sire" name="sire" list="animals" placeholder="Ram"></div>
+  </div>
+  <datalist id="animals">{% for a in app.farm.entities("animals") %}<option value="{{ a.id }}">{% endfor %}</datalist>
+  {% else %}
+  <label for="name">Name</label><input id="name" name="name" required value="{{ query.name or '' }}">
+  {% if etype == "herds" %}
+  <label class="row" style="font-weight:normal"><input type="checkbox" name="anonymous" value="1"> Anonymous: no individual animals, just a head count (hogs)</label>
+  {% endif %}
+  {% if etype == "paddocks" %}<p class="muted small">To draw its shape, use <a href="/draw">Draw paddock</a> instead.</p>{% endif %}
+  {% endif %}
+
+  <label>Other properties</label>
+  <div class="kv" id="kv">
+    {% for i in range(3) %}
+    <input name="key" list="fieldnames" placeholder="field"><input name="value" placeholder="value"><span></span>
+    {% endfor %}
+  </div>
+  <datalist id="fieldnames">{% for k in field_names %}<option value="{{ k }}">{% endfor %}</datalist>
+  <div class="row" style="margin-top:.8rem"><button class="primary">Create</button></div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const s = document.getElementById("series");
+if (s) {
+  const sync = () => {
+    const o = s.selectedOptions[0];
+    document.getElementById("number").hidden = !s.value;
+    document.getElementById("name").hidden = !!s.value;
+    if (s.value) document.getElementById("number").value = o.dataset.next;
+  };
+  s.addEventListener("change", sync);
+  if (s.options.length > 1) s.selectedIndex = 1;
+  sync();
+}
+</script>
+{% endblock %}

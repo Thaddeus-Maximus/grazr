@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source, map_head %}
+{% block title %}{{ e.id }}{% endblock %}
+{% block head %}{% if polygon %}{{ map_head() }}{% endif %}{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>{{ e.id }}</h1>
+  {% if e.acres %}<span class="muted">{{ e.acres|acres }} acres</span>{% endif %}
+  {% if e.parent %}<span>in {{ elink(e.parent) }}</span>{% endif %}
+  <div class="actions">
+    <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
+    <a class="btn" href="/draw?id={{ e.id|q }}">{% if polygon %}Edit shape{% else %}Draw shape{% endif %}</a>
+    <a class="btn" href="/edit/{{ e.id|q }}">Edit properties</a>
+  </div>
+</div>
+<div class="cols">
+  <div>
+    {% if polygon %}<div id="map" class="map small" data-config='{{ app.map_config()|tojson }}'></div>{% endif %}
+    <div class="panel" style="margin-top:.8rem">
+      <p>
+        {% if herds %}<b>Occupied</b> by {% for o in herds %}{{ elink(o.herd) }} since {{ o.start|ts }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% else %}Rested <b>{{ rest_exact|days }}</b>{% if rest_effective is not none and rest_effective != rest_exact %}
+          · effective <b>{{ rest_effective|days }}</b> <span class="muted small">(overlapping paddocks grazed since)</span>{% endif %}
+        {% endif %}
+      </p>
+      {{ prop_list(props) }}
+      {% if body %}<div class="note" style="margin-top:.8rem">{{ body }}</div>{% endif %}
+    </div>
+    {% if children %}
+    <h2>Paddocks inside</h2>
+    <p>{% for c in children %}{{ elink(c.id) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% endif %}
+    <h2>Grazing</h2>
+    {% if occupancies %}
+    <table>
+      {% for o in occupancies %}<tr><td>{{ elink(o.herd) }}</td><td class="small">{{ span(o.start, o.end) }}</td><td>{{ source(o.path, o.line) }}</td></tr>{% endfor %}
+    </table>
+    {% else %}<p class="muted">Never grazed.</p>{% endif %}
+    {{ photo_grid(photos) }}
+  </div>
+  <div>
+    <h2 style="margin-top:0">Timeline</h2>
+    {{ entry_list(timeline) }}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if polygon %}<script>grazr.restMap(document.getElementById("map"), {focus: {{ e.id|tojson }}});</script>{% endif %}
+{% endblock %}

@@ -502,8 +502,12 @@ preserved.
 ### 8.3 Map
 
 - Offline base imagery, downloaded once with `grazr tiles` (Q79). The default
-  source is **USGS imagery** (public domain, NAIP-based), which is safe to cache
-  and to ship in a FOSS project. A different XYZ URL can be set in `tiles:`.
+  source is **USGS imagery** (public domain), which is safe to cache and to ship
+  in a FOSS project. The USGS tile cache stops at zoom 16 (about 2.4 m/pixel), so
+  above that grazr renders each tile from the USGS NAIP image service
+  (0.6–1 m). NAIP is slow, about 1–2 s per tile, so `grazr tiles` is a one-time
+  wait. The server serves cached tiles and fetches and caches missing ones when
+  online. A different XYZ URL can be set in `tiles:`.
 - Faces are coloured by days since last grazed: **red** for grazed just now,
   shading to **green** at `rest_full_days` or more, and grey for never grazed
   (Q66). Occupied faces have a heavy outline and the herd's name.

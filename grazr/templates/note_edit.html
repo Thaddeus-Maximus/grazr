@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ path }}{% endblock %}
+{% block main %}
+<h1>{{ path }}</h1>
+<p class="muted small">Raw text. If Obsidian saves this file too, the last save wins.</p>
+<form method="post" action="/n/{{ path|q }}">
+  <div class="editor-wrap"><textarea class="raw" id="text" name="text" data-editor spellcheck="false">{{ text }}</textarea></div>
+  <div class="row" style="margin-top:.5rem">
+    <button class="primary">Save</button>
+    <a href="/n/{{ path|q }}">Cancel</a>
+    <label class="row" style="margin:0 0 0 auto;font-weight:normal">Add photo <input type="file" accept="image/*" multiple data-upload-for="text"></label>
+  </div>
+</form>
+{% endblock %}

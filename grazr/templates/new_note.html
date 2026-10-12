@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}New note{% endblock %}
+{% block main %}
+<h1>New note</h1>
+<p class="muted small">Write it the way you would in Obsidian. <code>[[</code> links an animal, herd or paddock;
+  <code>[[Herd]] -> [[Paddock]]</code> moves a herd; <code>@yesterday 6pm</code> back-dates a line.
+  Paste or drop photos into the text.</p>
+<form method="post" action="/new">
+  <div class="editor-wrap"><textarea id="text" name="text" rows="12" data-editor autofocus>{{ text }}</textarea></div>
+  <div class="row" style="margin-top:.5rem">
+    <label for="tags" style="margin:0">Tags</label><input id="tags" name="tags" value="{{ tags }}" placeholder="sheep vet" size="24">
+    <label class="row" style="margin:0;font-weight:normal">Add photo <input type="file" accept="image/*" multiple data-upload-for="text"></label>
+    <button class="primary" style="margin-left:auto">Save note</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const ta = document.getElementById("text");
+ta.setSelectionRange(ta.value.length, ta.value.length);
+</script>
+{% endblock %}

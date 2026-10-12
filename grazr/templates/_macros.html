@@ -1,0 +1,46 @@
+{% macro elink(id) %}<a href="{{ id|eurl }}">{{ id }}</a>{% endmacro %}
+
+{% macro entry_list(entries, empty="Nothing yet.") %}
+{% if entries %}
+<ul class="entries">
+  {% for e in entries %}
+  <li>
+    <a class="when" href="/n/{{ e.path|q }}#L{{ e.line }}" title="{{ e.path }}:{{ e.line }}">{{ e.ts|ts(e.approx) }}</a>
+    {% if e.move_kind %}<span class="badge move">{{ e.move_kind }}</span>{% endif %}
+    {{ e.text|inline }}
+    {% if e.via is defined and e.via %}<span class="badge via">via {{ e.via }}</span>{% endif %}
+    {% if e.inherited is defined and e.inherited %}<span class="badge via">under parent item</span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">{{ empty }}</p>{% endif %}
+{% endmacro %}
+
+{% macro prop_list(p) %}
+{% if p %}
+<dl class="props">
+  {% for k, v in p.items() %}
+  <dt>{{ k }}</dt>
+  <dd>{% if v is string %}{{ v|inline }}{% elif v is iterable and v is not mapping %}{{ v|join(", ") }}{% else %}{{ v }}{% endif %}</dd>
+  {% endfor %}
+</dl>
+{% else %}<p class="muted">No properties.</p>{% endif %}
+{% endmacro %}
+
+{% macro photo_grid(rows) %}
+{% if rows %}
+<h2>Photos</h2>
+<div class="photos">
+  {% for r in rows %}<a href="/img?name={{ r.name|q }}"><img src="/img?name={{ r.name|q }}" alt="{{ r.name }}" loading="lazy"></a>{% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro map_head() %}
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+{% endmacro %}
+
+{% macro span(start, end) %}{{ start|ts }} → {% if end %}{{ end|ts }}{% else %}<b>now</b>{% endif %}{% endmacro %}
+
+{% macro source(path, line) %}<a class="src" href="/n/{{ path|q }}#L{{ line }}">{{ path }}:{{ line }}</a>{% endmacro %}

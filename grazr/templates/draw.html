@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_macros.html" import map_head %}
+{% block title %}Draw paddock{% endblock %}
+{% block head %}{{ map_head() }}
+<link rel="stylesheet" href="/static/vendor/geoman/leaflet-geoman.css">
+<script src="/static/vendor/geoman/leaflet-geoman.min.js"></script>{% endblock %}
+{% block main %}
+<h1>{% if e %}{{ e.id }}: shape{% else %}Draw a paddock{% endif %}</h1>
+{% if grazed %}
+<div class="flash">{{ e.id }} has been grazed, so its shape is history. A changed shape is saved as a <b>new paddock</b>
+  (suggested <b>{{ suggestion }}</b>) with the same properties (§4.3).</div>
+{% endif %}
+<form method="post" action="/draw" id="drawform">
+<div class="cols">
+  <div>
+    <p class="muted small">Use the polygon tool (top left of the map) to click the corners, then click the first point to close it.
+      Drag the corners to adjust. Other paddocks show as white outlines, and corners snap to them.</p>
+    <label for="name">Name</label>
+    <input id="name" name="name" required value="{{ suggestion if grazed else (e.id if e else '') }}">
+    {% if grazed %}<input type="hidden" name="copy_from" value="{{ e.id }}">{% endif %}
+    <label for="parent">Inside (parent)</label>
+    <input id="parent" name="parent" list="padlist" value="{{ e.parent if e and e.parent else '' }}" placeholder="optional, e.g. South Field">
+    <datalist id="padlist">{% for p in paddocks %}<option value="{{ p }}">{% endfor %}</datalist>
+    <input type="hidden" name="perimeter" id="perimeter">
+    <div class="row" style="margin-top:1rem"><button class="primary">Save paddock</button>
+      {% if e %}<a href="{{ e.id|eurl }}">Cancel</a>{% endif %}</div>
+  </div>
+  <div><div id="map" class="map" data-config='{{ app.map_config()|tojson }}'></div></div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+(async () => {
+  const res = await fetch("/api/map");
+  const data = await res.json();
+  const editing = {{ (e.id if e else none)|tojson }};
+  const others = data.features.filter((f) => f.properties.kind === "paddock" && f.properties.id !== editing)
+    .map((f) => ({id: f.properties.id, pts: f.geometry.coordinates[0].map(([lon, lat]) => [lat, lon])}));
+  const existing = {{ (e.polygon if e and e.polygon else "null")|safe }};
+  grazr.drawMap(document.getElementById("map"), document.getElementById("perimeter"), existing, others);
+  document.getElementById("drawform").addEventListener("submit", (ev) => {
+    if (!document.getElementById("perimeter").value) { ev.preventDefault(); alert("Draw the paddock on the map first."); }
+  });
+})();
+</script>
+{% endblock %}

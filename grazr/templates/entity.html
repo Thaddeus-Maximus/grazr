@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_list, prop_list, photo_grid %}
+{% block title %}{{ e.id }}{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>{{ e.id }}</h1><span class="muted">{{ e.type }}</span>
+  <div class="actions">
+    <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
+    <a class="btn" href="/edit/{{ e.id|q }}">Edit properties</a>
+  </div>
+</div>
+<div class="cols">
+  <div>
+    <div class="panel">{{ prop_list(props) }}{% if body %}<div class="note">{{ body }}</div>{% endif %}</div>
+    {{ photo_grid(photos) }}
+  </div>
+  <div><h2 style="margin-top:0">Timeline</h2>{{ entry_list(timeline) }}</div>
+</div>
+{% endblock %}

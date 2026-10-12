@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import map_head %}
+{% block title %}Move a herd{% endblock %}
+{% block head %}{{ map_head() }}{% endblock %}
+{% block main %}
+<h1>Move a herd</h1>
+<form method="post" action="/move" id="moveform">
+<div class="cols">
+  <div>
+    <label for="herd">Herd</label>
+    <select id="herd" name="herd" required>
+      <option value="">choose…</option>
+      {% for h in herds %}<option value="{{ h.id }}" {% if h.id == herd %}selected{% endif %}>{{ h.id }}{% if current[h.id] %} (on {{ current[h.id]|join(", ") }}){% endif %}</option>{% endfor %}
+    </select>
+
+    <label>To paddock(s)</label>
+    <p class="muted small" style="margin:0">Click paddocks on the map, or tick them here.</p>
+    <div id="pads" style="max-height:14rem;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:.3rem .6rem">
+      {% for p in paddocks %}<label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="paddock" value="{{ p.id }}"> {{ p.id }}</label>{% endfor %}
+    </div>
+
+    <label>How</label>
+    <label class="row" style="font-weight:normal;margin:0"><input type="radio" name="arrow" value="->" checked>
+      <span><b>Move</b> <code>-&gt;</code>: leave paddocks not ticked</span></label>
+    <label class="row" style="font-weight:normal;margin:0"><input type="radio" name="arrow" value="+>">
+      <span><b>Extend</b> <code>+&gt;</code>: keep current paddocks open too (back-grazing)</span></label>
+
+    <label for="when">When</label>
+    <input id="when" name="when" type="datetime-local"> <span class="muted small">blank = now</span>
+    <label for="comment">Comment</label>
+    <input id="comment" name="comment" style="width:100%" placeholder="front fence moved, back fence left open">
+
+    <p class="muted small">Writes one line to a new note: <code id="preview"></code></p>
+    <div class="row">
+      <button class="primary">Write move</button>
+      <button name="retire" value="1" formnovalidate onclick="return confirm('Take this herd off every paddock?')">Take off all paddocks</button>
+    </div>
+  </div>
+  <div><div id="map" class="map" data-config='{{ app.map_config()|tojson }}'></div></div>
+</div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+(async () => {
+  const form = document.getElementById("moveform");
+  const boxes = () => [...form.querySelectorAll("input[name=paddock]")];
+  const preview = () => {
+    const h = form.herd.value, ps = boxes().filter((b) => b.checked).map((b) => `[[${b.value}]]`);
+    const a = form.querySelector("input[name=arrow]:checked").value;
+    document.getElementById("preview").textContent = h && ps.length ? `[[${h}]] ${a} ${ps.join(", ")} ${form.comment.value}` : "…";
+  };
+  form.addEventListener("input", preview);
+  form.addEventListener("change", preview);
+  preview();
+  await grazr.restMap(document.getElementById("map"), {
+    onPick: (ids) => {
+      const id = ids[ids.length - 1];
+      const b = boxes().find((x) => x.value === id);
+      if (b) { b.checked = !b.checked; b.scrollIntoView({block: "nearest"}); preview(); }
+    },
+  });
+})();
+</script>
+{% endblock %}

@@ -80,6 +80,7 @@ class Index:
         self.faces_key = None
         self.faces: list[geo.Face] = []
         self.generation = 0
+        self.images: dict[str, str] = {}
         self.db = self._open()
 
     # --- database --------------------------------------------------------
@@ -223,7 +224,7 @@ class Index:
             self.faces = geo.faces(polys)
             self.faces_key = fkey
 
-        images = self._image_lookup()
+        images = self.images = self._image_lookup()
         self._write(entities, notes, der, resolve, polys, images, warnings)
 
     def _check_link(self, path, line, target, r, warnings, text_line=None):

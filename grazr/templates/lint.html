@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Lint{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>Lint</h1>
+  <span class="muted">{{ groups.values()|map("length")|sum }} {{ "notes" if show_all else "warnings" }} in {{ groups|length }} files</span>
+  <div class="actions">
+    {% if show_all %}<a class="btn" href="/lint">Hide informational</a>{% else %}<a class="btn" href="/lint?all=1">Show informational (unattached entries)</a>{% endif %}
+  </div>
+</div>
+{% if not groups %}<p>Nothing to fix.</p>{% endif %}
+{% for path, items in groups.items() %}
+<h2><a href="/n/{{ path|q }}">{{ path }}</a></h2>
+<table class="lint">
+  {% for w, fix in items %}
+  <tr>
+    <td style="width:4rem"><a href="/n/{{ path|q }}#L{{ w.line }}">{{ w.line }}</a></td>
+    <td class="code warn-{{ w.severity }}">{{ w.code }}</td>
+    <td>{{ w.message }}</td>
+    <td style="width:7rem">
+      {% if fix %}
+      <form method="post" action="/lint/fix">
+        <input type="hidden" name="path" value="{{ w.path }}"><input type="hidden" name="line" value="{{ w.line }}">
+        <input type="hidden" name="fix" value='{{ fix|tojson }}'>
+        {% if show_all %}<input type="hidden" name="all" value="1">{% endif %}
+        <button>{{ "Link it" if fix.kind == "link" else "Fix" }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+{% endblock %}

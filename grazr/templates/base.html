@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}grazr{% endblock %} · grazr</title>
+<link rel="stylesheet" href="/static/app.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">grazr</a>
+  <nav>
+    <a href="/">Map</a>
+    {% for t in app.types() %}<a href="/{{ t }}">{{ t|capitalize }}</a>{% endfor %}
+    <a href="/new">+ Note</a>
+    <a href="/move">Move</a>
+    <a href="/lint">Lint{% set n = app.warning_count() %}{% if n %} <span class="lintcount">{{ n }}</span>{% endif %}</a>
+  </nav>
+  <form action="/search"><input type="search" name="q" placeholder="Search or jump to…" value="{{ q|default('') }}"></form>
+</header>
+<main>
+{% block main %}{% endblock %}
+</main>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

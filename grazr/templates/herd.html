@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source %}
+{% block title %}{{ e.id }}{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>{{ e.id }}</h1>
+  <span class="muted">{% if e.anonymous %}{{ head if head is not none else "?" }} head{% else %}{{ members|length }} animals{% endif %}</span>
+  {% if paddocks %}<span>on {% for o in paddocks %}{{ elink(o.paddock) }}{% if not loop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+  <div class="actions">
+    <a class="btn primary" href="/move?herd={{ e.id|q }}">Move herd</a>
+    <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
+    <a class="btn" href="/edit/{{ e.id|q }}">Edit properties</a>
+  </div>
+</div>
+<div class="cols">
+  <div>
+    <div class="panel">{{ prop_list(props) }}{% if body %}<div class="note">{{ body }}</div>{% endif %}</div>
+
+    {% if e.anonymous %}
+    <h2>Head count</h2>
+    <form method="post" action="/new" class="row">
+      <input type="hidden" name="next" value="/h/{{ e.id|q }}">
+      <input name="text" placeholder="[[{{ e.id }}]] = 12   or   [[{{ e.id }}]] -1 died" size="34" value="[[{{ e.id }}]] ">
+      <button>Record</button>
+    </form>
+    <table>
+      {% for h in heads %}<tr><td>{{ h.count }}</td><td class="small">{{ span(h.start, h.end) }}</td><td>{{ source(h.path, h.line) }}</td></tr>{% endfor %}
+    </table>
+    {% else %}
+    <h2>Members</h2>
+    {% if members %}
+    <form method="post" action="/move-animals">
+      <input type="hidden" name="next" value="/h/{{ e.id|q }}">
+      <table>
+        <tr><th><input type="checkbox" data-check-all="input[name=animal]" title="all"></th><th>Animal</th><th>Name</th><th>Sex</th><th>Since</th></tr>
+        {% for a in members %}{% set af = fields(a) %}
+        <tr><td><input type="checkbox" name="animal" value="{{ a.id }}"></td><td>{{ elink(a.id) }}</td>
+            <td>{{ af.name or "" }}</td><td>{{ af.sex or "" }}</td>
+            <td class="small">{{ a.joined|ts }}{% if a.inherited %} <span class="badge via">with dam</span>{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      <div class="row" style="margin-top:.6rem">
+        Move checked to
+        <input name="dest" list="herdlist" placeholder="herd" required>
+        <datalist id="herdlist">{% for h in herds %}<option value="{{ h }}">{% endfor %}</datalist>
+        <label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="create" value="1"> create it if new</label>
+        <input name="when" type="datetime-local" title="when (blank = now)">
+        <input name="comment" placeholder="comment">
+        <button class="primary">Move</button>
+      </div>
+    </form>
+    {% else %}<p class="muted">No animals. Move some in from another herd or the animals list.</p>{% endif %}
+    {% endif %}
+
+    <h2>Grazing</h2>
+    {% if occupancies %}
+    <table>
+      {% for o in occupancies %}<tr><td>{{ elink(o.paddock) }}</td><td class="small">{{ span(o.start, o.end) }}</td><td>{{ source(o.path, o.line) }}</td></tr>{% endfor %}
+    </table>
+    {% else %}<p class="muted">Never moved onto a paddock.</p>{% endif %}
+
+    {% if joins %}
+    <h2>Membership moves</h2>
+    <table>
+      {% for m in joins %}<tr><td>{{ elink(m.animal) }}</td><td class="small">{{ span(m.start, m.end) }}</td></tr>{% endfor %}
+    </table>
+    {% endif %}
+    {{ photo_grid(photos) }}
+  </div>
+  <div>
+    <h2 style="margin-top:0">Timeline</h2>
+    {{ entry_list(timeline) }}
+  </div>
+</div>
+{% endblock %}

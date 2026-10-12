@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source %}
+{% block title %}{{ e.id }}{% endblock %}
+{% macro ped(node, label) %}
+{% if node %}
+<li><span class="muted small">{{ label }}</span>
+  {% if node.exists %}{{ elink(node.id) }}{% else %}<span class="link unresolved">{{ node.id }}</span>{% endif %}
+  {% if node.dam or node.sire %}<ul>{{ ped(node.dam, "dam") }}{{ ped(node.sire, "sire") }}</ul>{% endif %}
+</li>
+{% endif %}
+{% endmacro %}
+{% block main %}
+{% set f = props %}
+<div class="titlebar">
+  <h1>{{ e.id }}</h1>
+  {% if f.name %}<span class="muted">{{ f.name }}</span>{% endif %}
+  {% if left %}<span class="badge left">left {{ e.left_on }}</span>{% endif %}
+  {% if f.status %}<span class="badge">{{ f.status }}</span>{% endif %}
+  <div class="actions">
+    <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
+    <a class="btn" href="/edit/{{ e.id|q }}">Edit properties</a>
+    <a class="btn" href="/n/{{ e.path|q }}?edit=1">Edit file</a>
+  </div>
+</div>
+<div class="cols">
+  <div>
+    <div class="panel">
+      {% if membership %}
+      <p>In {{ elink(membership.herd) }} since {{ membership.start|ts }}{% if membership.inherited %} <span class="badge via">with dam</span>{% endif %}
+      {% if paddocks %} · on {% for o in paddocks %}{{ elink(o.paddock) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+      {% elif not left %}<p class="muted">Not in any herd. Tick it in the <a href="/animals">animals list</a> to move it, or write <code>[[{{ e.id }}]] -> [[Herd]]</code>.</p>{% endif %}
+      {% if e.born %}<p>Born {{ e.born }}{% if e.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet", 4: "quad"}.get(e.birth_type, e.birth_type ~ "-birth") }}{% endif %}</p>{% endif %}
+      {{ prop_list(f) }}
+      {% if body %}<div class="note" style="margin-top:.8rem">{{ body }}</div>{% endif %}
+    </div>
+
+    {% if e.dam or e.sire %}
+    <h2>Pedigree</h2>
+    <ul class="small">{{ ped(pedigree.dam, "dam") }}{{ ped(pedigree.sire, "sire") }}</ul>
+    {% endif %}
+
+    {% if lambing %}
+    <h2>Lambing</h2>
+    <table>
+      <tr><th>Year</th><th>Lambs</th></tr>
+      {% for y in lambing %}
+      <tr><td>{{ y.year }}</td><td>
+        {% for l in y.lambs %}
+        <div>{{ elink(l.id) }} <span class="muted small">{{ l.born }} · {{ l.sex or "?" }}{% if l.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet"}.get(l.birth_type, l.birth_type) }}{% endif %}</span>
+          {% if not l.active %}<span class="badge left">gone</span>{% endif %}</div>
+        {% endfor %}
+      </td></tr>
+      {% endfor %}
+    </table>
+    {% elif offspring %}
+    <h2>Offspring</h2>
+    <p>{% for o in offspring %}{{ elink(o.id) }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% endif %}
+
+    <h2>Herd history</h2>
+    {% if history %}
+    <table>
+      {% for m in history %}
+      <tr><td>{{ elink(m.herd) }}{% if m.inherited %} <span class="badge via">with dam</span>{% endif %}</td>
+          <td class="small">{{ span(m.start, m.end) }}</td><td>{{ source(m.path, m.line) }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">No herd moves.</p>{% endif %}
+    {{ photo_grid(photos) }}
+  </div>
+  <div>
+    <h2 style="margin-top:0">Timeline</h2>
+    {{ entry_list(timeline) }}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ path }}{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>{{ path }}</h1>
+  <div class="actions"><a class="btn" href="/n/{{ path|q }}?edit=1">Edit raw</a></div>
+</div>
+{% if warnings %}
+<div class="panel" style="margin-bottom:1rem">
+  {% for w in warnings %}<div class="small warn-{{ w.severity }}"><a href="#L{{ w.line }}">line {{ w.line }}</a> · {{ w.code }} · {{ w.message }}</div>{% endfor %}
+</div>
+{% endif %}
+<article class="panel note">{{ html }}</article>
+{% endblock %}
