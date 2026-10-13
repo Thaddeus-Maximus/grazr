@@ -2,8 +2,8 @@
 {% from "_macros.html" import map_head %}
 {% block title %}Draw paddock{% endblock %}
 {% block head %}{{ map_head() }}
-<link rel="stylesheet" href="/static/vendor/geoman/leaflet-geoman.css">
-<script src="/static/vendor/geoman/leaflet-geoman.min.js"></script>{% endblock %}
+<link rel="stylesheet" href="{{ static('vendor/geoman/leaflet-geoman.css') }}">
+<script src="{{ static('vendor/geoman/leaflet-geoman.min.js') }}"></script>{% endblock %}
 {% block main %}
 <h1>{% if e %}{{ e.id }}: shape{% else %}Draw a paddock{% endif %}</h1>
 {% if grazed %}

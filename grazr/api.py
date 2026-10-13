@@ -312,7 +312,8 @@ class Farm:
                               "rest_effective": rest["effective"].get(p["id"]),
                               "herds": herds_on.get(p["id"], [])}})
         return {"type": "FeatureCollection", "features": feats,
-                "as_of": as_of.strftime(TS), "rest_full_days": self.config["rest_full_days"]}
+                "as_of": as_of.strftime(TS), "rest_full_days": self.config["rest_full_days"],
+                "occupied_full_days": self.config["occupied_full_days"]}
 
     # --- feeds --------------------------------------------------------------
     def recent(self, limit: int = 60):

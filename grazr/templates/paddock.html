@@ -18,9 +18,10 @@
     {% if polygon %}<div id="map" class="map small" data-config='{{ app.map_config()|tojson }}'></div>{% endif %}
     <div class="panel" style="margin-top:.8rem">
       <p>
-        {% if herds %}<b>Occupied</b> by {% for o in herds %}{{ elink(o.herd) }} since {{ o.start|ts }}{% if not loop.last %}, {% endif %}{% endfor %}
-        {% else %}Rested <b>{{ rest_exact|days }}</b>{% if rest_effective is not none and rest_effective != rest_exact %}
-          · effective <b>{{ rest_effective|days }}</b> <span class="muted small">(overlapping paddocks grazed since)</span>{% endif %}
+        <b>{{ rest_exact|days|capitalize }}</b>
+        {% if herds %} by {% for o in herds %}{{ elink(o.herd) }} since {{ o.start|ts }}{% if not loop.last %}, {% endif %}{% endfor %}
+        {% elif rest_effective is not none and rest_effective != rest_exact %}
+          · effective <b>{{ rest_effective|days }}</b> <span class="muted small">(overlapping paddocks grazed since)</span>
         {% endif %}
       </p>
       {{ prop_list(props) }}

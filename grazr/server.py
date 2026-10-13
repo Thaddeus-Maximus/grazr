@@ -49,7 +49,7 @@ class App:
         self.env = Environment(loader=PackageLoader("grazr", "templates"),
                                autoescape=select_autoescape(["html"]), trim_blocks=True,
                                lstrip_blocks=True)
-        self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone)
+        self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, static=self.static_url)
         self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
@@ -90,19 +90,32 @@ class App:
         return ("~" if approx else "") + out
 
     @staticmethod
-    def fmt_days(d) -> str:
+    def fmt_span(d: float) -> str:
+        return f"{d:.2f} days"
+
+    def fmt_days(self, d) -> str:
+        """Signed rest days (§6.3): negative means occupied for that long."""
         if d is None:
             return "never grazed"
-        if d == 0:
-            return "occupied"
-        return f"{d:.0f} days" if d >= 2 else f"{d * 24:.0f} hours"
+        if d < 0:
+            return f"occupied {self.fmt_span(-d)}"
+        return f"rested {self.fmt_span(d)}"
+
+    @staticmethod
+    def static_url(rel: str) -> str:
+        """`/static/<rel>?v=<mtime>`: a changed file gets a new URL, so browsers never run a stale copy."""
+        try:
+            v = int((STATIC / rel).stat().st_mtime)
+        except OSError:
+            v = 0
+        return f"/static/{rel}?v={v}"
 
     def map_config(self) -> dict:
         cfg = self.farm.config
         t = cfg["tiles"] or {}
         return {"center": cfg["map"]["center"], "zoom": cfg["map"]["zoom"],
                 "min_zoom": int(t.get("min_zoom", 13)), "max_zoom": int(t.get("max_zoom", 19)),
-                "rest_full_days": cfg["rest_full_days"]}
+                "rest_full_days": cfg["rest_full_days"], "occupied_full_days": cfg["occupied_full_days"]}
 
     @staticmethod
     def display_value(v) -> str:
@@ -596,7 +609,7 @@ def make_handler(app: App, port: int):
                     p = (STATIC / unquote(path[8:])).resolve()
                     if STATIC.resolve() not in p.parents or not p.is_file():
                         raise NotFound()
-                    return self._file(p, cache=True)
+                    return self._file(p, cache="v=" in url.query)
                 if method == "GET" and path.startswith("/tiles/"):
                     got = tiles.serve(app.farm.root, app.farm.config, path[7:])
                     if got is None:

@@ -4,16 +4,22 @@
 const grazr = (() => {
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 
-  function restColor(days, full) {
+  /* Signed rest days: red at -occFull (occupied that long), orange at 0, green at +full. */
+  const ORANGE = 30, GREEN = 120;
+  function restColor(days, full, occFull) {
     if (days === null || days === undefined) return "#9e9e9e";
-    const t = Math.max(0, Math.min(1, days / full));
-    return `hsl(${Math.round(120 * t)}, ${75 - 15 * t}%, ${45 - 7 * t}%)`;
+    if (days < 0) {
+      const t = Math.min(1, -days / occFull);
+      return `hsl(${Math.round(ORANGE * (1 - t))}, 80%, 47%)`;
+    }
+    const t = Math.min(1, days / full);
+    return `hsl(${Math.round(ORANGE + (GREEN - ORANGE) * t)}, ${80 - 20 * t}%, ${47 - 9 * t}%)`;
   }
 
+  const span = (d) => `${d.toFixed(2)} days`;
   function fmtDays(d) {
     if (d === null || d === undefined) return "never grazed";
-    if (d === 0) return "occupied";
-    return d >= 2 ? `${Math.round(d)} days` : `${Math.round(d * 24)} hours`;
+    return d < 0 ? `occupied ${span(-d)}` : `rested ${span(d)}`;
   }
 
   function baseMap(el, mapOpts = {}) {
@@ -36,18 +42,36 @@ const grazr = (() => {
     const legend = L.control({position: "bottomright"});
     legend.onAdd = () => {
       const d = L.DomUtil.create("div", "legend");
-      d.innerHTML = `<div>days rested</div><div class="bar"></div>
-        <div style="display:flex;justify-content:space-between"><span>0</span><span>${cfg.rest_full_days}+</span></div>
+      const occ = cfg.occupied_full_days, full = cfg.rest_full_days;
+      const mid = (100 * occ / (occ + full)).toFixed(1);
+      const stops = [-occ, -occ / 2, 0, full / 3, 2 * full / 3, full]
+        .map((x) => `${restColor(x, full, occ)} ${(100 * (x + occ) / (occ + full)).toFixed(1)}%`).join(", ");
+      d.innerHTML = `<div>days occupied · rested</div>
+        <div class="bar" style="background:linear-gradient(90deg, ${stops})"></div>
+        <div style="position:relative;height:1.2em">
+          <span style="position:absolute;left:0">${occ}+</span>
+          <span style="position:absolute;left:${mid}%;transform:translateX(-50%)">0</span>
+          <span style="position:absolute;right:0">${full}+</span></div>
         <div><span class="sw" style="background:#9e9e9e"></span> never grazed</div>`;
       return d;
     };
     legend.addTo(map);
 
+    // Herd labels are links. Open them directly rather than relying on Leaflet's
+    // tooltip interactivity, and keep the click from reaching the paddock below.
+    el.addEventListener("click", (e) => {
+      const a = e.target.closest(".leaflet-tooltip a[href]");
+      if (!a) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = a.href;
+    }, true);
+
     async function load(asOf) {
       const res = await fetch("/api/map" + (asOf ? "?as_of=" + asOf : ""));
       const data = await res.json();
       if (layer) layer.remove();
-      const full = data.rest_full_days || 60;
+      const full = data.rest_full_days || 60, occFull = data.occupied_full_days || 10;
       const focus = opts.focus;
       const faces = data.features.filter((f) => f.properties.kind === "face");
       const pads = data.features.filter((f) => f.properties.kind === "paddock");
@@ -55,7 +79,7 @@ const grazr = (() => {
       L.geoJSON({type: "FeatureCollection", features: faces}, {
         style: (f) => ({
           color: f.properties.herds.length ? "#fff" : "#000", weight: f.properties.herds.length ? 3 : 0.5,
-          fillColor: restColor(f.properties.rest, full), fillOpacity: focus ? 0.25 : 0.55,
+          fillColor: restColor(f.properties.rest, full, occFull), fillOpacity: focus ? 0.25 : 0.55,
         }),
         onEachFeature: (f, l) => {
           const p = f.properties;

@@ -39,8 +39,8 @@
 {% endmacro %}
 
 {% macro map_head() %}
-<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
-<script src="/static/vendor/leaflet/leaflet.js"></script>
+<link rel="stylesheet" href="{{ static('vendor/leaflet/leaflet.css') }}">
+<script src="{{ static('vendor/leaflet/leaflet.js') }}"></script>
 {% endmacro %}
 
 {% macro span(start, end) %}{{ start|ts }} → {% if end %}{{ end|ts }}{% else %}<b>now</b>{% endif %}{% endmacro %}

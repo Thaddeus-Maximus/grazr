@@ -15,7 +15,8 @@ DEFAULTS = {
     "timezone": "America/Chicago",
     "note_filename": "%Y%b%d-%H%M",
     "id_digits": 3,
-    "rest_full_days": 60,
+    "rest_full_days": 60,          # map: green at this many days rested
+    "occupied_full_days": 10,      # map: red at this many days occupied
     "map": {"center": [40.35, -89.13], "zoom": 16},
     "tiles": {"source": "usgs-imagery", "min_zoom": 13, "max_zoom": 19},
     "attachment_dirs": ["attachments"],

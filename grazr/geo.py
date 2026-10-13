@@ -71,23 +71,30 @@ def faces(polys: dict[str, Polygon]) -> list[Face]:
     return out
 
 
-def last_grazed(occs, as_of: datetime) -> tuple[bool, datetime | None]:
-    """(occupied at as_of, latest end before as_of) for (start, end) pairs."""
-    occupied, last = False, None
-    for start, end in occs:
-        if start > as_of:
-            continue
-        if end is None or end > as_of:
-            occupied = True
-        elif last is None or end > last:
-            last = end
-    return occupied, last
+def last_grazed(occs, as_of: datetime) -> tuple[datetime | None, datetime | None]:
+    """(occupied since, latest end) at `as_of` for (start, end) pairs.
+
+    "Since" runs back through occupancies that touch end to start, so one herd
+    leaving as another arrives counts as one stretch.
+    """
+    occs = [(s, e) for s, e in occs if s <= as_of]
+    since = min((s for s, e in occs if e is None or e > as_of), default=None)
+    last = max((e for s, e in occs if e is not None and e <= as_of), default=None)
+    if since is not None:
+        changed = True
+        while changed:
+            changed = False
+            for s, e in occs:
+                if s < since and (e is None or e >= since):
+                    since, changed = s, True
+    return since, last
 
 
-def rest_days(occupied: bool, last: datetime | None, as_of: datetime) -> float | None:
-    """0 while occupied, None if never grazed."""
-    if occupied:
-        return 0.0
+def rest_days(since: datetime | None, last: datetime | None, as_of: datetime) -> float | None:
+    """Signed days: rested if positive, occupied for that long if negative (never 0.0
+    while occupied, so `< 0` always means occupied). None if never grazed."""
+    if since is not None:
+        return -max((as_of - since).total_seconds() / 86400, 1e-6)
     if last is None:
         return None
     return (as_of - last).total_seconds() / 86400

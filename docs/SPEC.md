@@ -533,12 +533,16 @@ preserved.
   (0.6–1 m). NAIP is slow, about 1–2 s per tile, so `grazr tiles` is a one-time
   wait. The server serves cached tiles and fetches and caches missing ones when
   online. A different XYZ URL can be set in `tiles:`.
-- Faces are coloured by days since last grazed: **red** for grazed just now,
-  shading to **green** at `rest_full_days` or more, and grey for never grazed
-  (Q66). Occupied faces have a heavy outline and the herd's name.
+- Faces are coloured on one signed scale of days: occupied counts as negative
+  rest, from the start of the current stretch of grazing (herds arriving as
+  others leave count as one stretch). **Red** at `occupied_full_days` (10) or
+  more days occupied, **orange** at 0 (just moved on, or just vacated), **green**
+  at `rest_full_days` (60) or more rested, grey for never grazed (Q66).
+  Occupancy and rest are shown in decimal days ("occupied 5.07 days", "rested
+  12.04 days"). Occupied faces have a heavy outline and the herd's name, which
+  links to the herd.
 - Fields are drawn as outlines. Clicking a polygon opens the paddock.
-- A legend and a "days rested as of" date picker let you view the map as it was
-  on a past date.
+- A legend shows the scale. The map is always as of now.
 
 ## 9. CLI
 
