@@ -127,7 +127,7 @@ img.embed { max-width: 100%; max-height: 320px; border-radius: 6px; display: blo
 .leaflet-popup-content a.link.herds { color: #8d6e00; }
 /* Tagged animals are solid badges in their tag colour (colours per series, set in base.html) */
 a.link.animals.eartag {
-  display: inline-block; border-radius: 10px; padding: 0 8px; font-size: .78rem; line-height: 1.5;
+  display: inline-block; border-radius: 3px; padding: 0 6px; font-size: .78rem; line-height: 1.5;
   background: var(--tag-bg); color: var(--tag-fg); border: 1px solid rgba(0,0,0,.18);
   font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; text-decoration: none;
   vertical-align: baseline;
