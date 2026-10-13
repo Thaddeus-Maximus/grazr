@@ -27,6 +27,7 @@ const grazr = (() => {
   }
 
   const pageUrl = (id) => "/p/" + encodeURIComponent(id);
+  const herdLinks = (ids) => ids.map((h) => `<a class="link herds" href="/h/${encodeURIComponent(h)}">${esc(h)}</a>`).join(", ");
 
   /* The rest map: faces coloured by days rested, parents as outlines (§8.3). */
   async function restMap(el, opts = {}) {
@@ -59,8 +60,8 @@ const grazr = (() => {
         onEachFeature: (f, l) => {
           const p = f.properties;
           l.bindPopup(`<b>${fmtDays(p.rest)}</b> · ${p.acres.toFixed(2)} ac<br>` +
-            p.paddocks.map((id) => `<a href="${pageUrl(id)}">${esc(id)}</a>`).join(", ") +
-            (p.herds.length ? `<br>herds: ${p.herds.map(esc).join(", ")}` : ""));
+            p.paddocks.map((id) => `<a class="link paddocks" href="${pageUrl(id)}">${esc(id)}</a>`).join(", ") +
+            (p.herds.length ? `<br>herds: ${herdLinks(p.herds)}` : ""));
           if (opts.onPick) l.on("click", () => opts.onPick(p.paddocks));
         },
       }).addTo(layer);
@@ -73,7 +74,8 @@ const grazr = (() => {
         onEachFeature: (f, l) => {
           const p = f.properties;
           if (p.herds.length) {
-            l.bindTooltip(p.herds.map(esc).join(", "), {permanent: true, direction: "center", className: "herd-label"});
+            l.bindTooltip(herdLinks(p.herds), {permanent: true, direction: "center", className: "herd-label",
+              interactive: true});
           }
         },
       }).addTo(layer);
