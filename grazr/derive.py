@@ -182,8 +182,8 @@ def derive(entities: dict[str, Entity], entries: list[Entry],
 
     for dt, _pk, _line, _seq, kind, p in events:
         if kind == "born":
-            if p in st.explicit:
-                continue
+            if p in st.explicit or entities[p].left_unknown:
+                continue      # gone on an unknown date: don't place it in a herd
             dam = dams[p]
             st.following[p] = dam
             if dam in st.cur:

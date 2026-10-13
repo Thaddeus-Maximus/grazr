@@ -97,7 +97,18 @@ class Index:
                 db.close()
             except sqlite3.DatabaseError:
                 pass
-            self.db_path.unlink()
+            try:
+                self.db_path.unlink()
+            except PermissionError:
+                # Windows: another grazr (an old server) has it open. Empty it in place.
+                db = sqlite3.connect(self.db_path, check_same_thread=False)
+                names = [r[0] for r in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+                    "AND name NOT LIKE 'fts_%'")]
+                for n in names:
+                    db.execute(f'DROP TABLE IF EXISTS "{n}"')
+                db.commit()
+                db.close()
         db = sqlite3.connect(self.db_path, check_same_thread=False)
         db.executescript(DDL)
         db.execute("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA),))
