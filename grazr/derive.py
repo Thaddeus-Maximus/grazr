@@ -119,6 +119,15 @@ class _State:
         for lamb, dam in list(self.following.items()):
             if dam == animal:
                 self.set_herd(lamb, new[0] if new else None, t, True, path, line, seen)
+        if old is not None and (new is None or new[0] != old[0]):
+            self.emptied(old[0], t)
+
+    def emptied(self, herd: str, t: datetime):
+        """A herd whose last animal just left comes off its paddocks (D-8)."""
+        ent = self.ent.get(herd)
+        if ent is not None and not ent.anonymous and not self.members(herd):
+            for pad in list(self.occ.get(herd, {})):
+                self.close_occ(herd, pad, t)
 
     # occupancy ------------------------------------------------------------
     def close_occ(self, herd: str, paddock: str, t: datetime):
@@ -139,6 +148,9 @@ class _State:
         if n < 0:
             self.out.warnings.append(Warning(path, line, "negative-head",
                                              f"{herd} head count goes to {n}"))
+        if n <= 0:          # none left: off its paddocks, like an emptied herd (D-8)
+            for pad in list(self.occ.get(herd, {})):
+                self.close_occ(herd, pad, t)
 
 
 def derive(entities: dict[str, Entity], entries: list[Entry],

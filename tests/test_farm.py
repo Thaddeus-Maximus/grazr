@@ -72,14 +72,31 @@ def test_migrate(farm):
     assert "[[orange-010]] looks fine" in changes["notes/2026Oct12-0707.md"][1]
 
 
-def test_retire_and_empty_occupying(farm, farm_root):
-    note = farm_root / "notes" / "2026Oct13-0800.md"
-    note.write_text("[[orange-011]] -> [[Ewe Herd]]\n", encoding="utf-8")
+def test_emptied_herd_leaves_its_paddocks(farm, farm_root):
+    # D-8: when the last animal leaves, the herd comes off its paddocks and goes idle
+    (farm_root / "notes" / "2026Oct13-0800.md").write_text("[[orange-011]] -> [[Ewe Herd]]\n", encoding="utf-8")
     farm.refresh()
-    assert any(w["code"] == "empty-occupying" for w in farm.warnings())
-    note.write_text("[[orange-011]] -> [[Ewe Herd]]\n[[Hospital]] -> [[none]]\n", encoding="utf-8")
-    farm.refresh()
+    assert rows(farm, "SELECT end FROM occupancies WHERE herd='Hospital'") == [("2026-10-13T08:00",)]
     assert not any(w["code"] == "empty-occupying" for w in farm.warnings())
+    assert farm.idle(farm.entity("Hospital"))
+
+
+def test_split_then_back_by_animals(farm, farm_root):
+    # the Ewelambs case: animals out to a new herd on a paddock, later all moved back
+    (farm_root / "herds" / "Weaners.md").write_text("", encoding="utf-8")
+    (farm_root / "notes" / "2026Oct12-2000.md").write_text(
+        "[[orange-010]], [[orange-117]] -> [[Weaners]]\n[[Weaners]] -> [[P3]]\n", encoding="utf-8")
+    (farm_root / "notes" / "2026Oct12-2100.md").write_text(
+        "[[orange-010]], [[orange-117]] -> [[Ewe Herd]] done weaning\n", encoding="utf-8")
+    farm.refresh()
+    assert rows(farm, "SELECT start, end FROM occupancies WHERE herd='Weaners'") == \
+        [("2026-10-12T20:00", "2026-10-12T21:00")]
+    assert farm.idle(farm.entity("Weaners"))
+
+
+def test_retire(farm, farm_root):
+    (farm_root / "notes" / "2026Oct13-0800.md").write_text("[[Hospital]] -> [[none]]\n", encoding="utf-8")
+    farm.refresh()
     assert rows(farm, "SELECT end FROM occupancies WHERE herd='Hospital'") == [("2026-10-13T08:00",)]
 
 

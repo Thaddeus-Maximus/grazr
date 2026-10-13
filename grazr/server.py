@@ -352,7 +352,7 @@ class App:
 
     def r_move(self, query, **_):
         f = self.farm
-        herds = [h for h in f.entities("herds")]
+        herds = [h for h in f.entities("herds") if h["id"] == query.get("herd") or not f.idle(h)]
         paddocks = [p for p in f.entities("paddocks")]
         return self.page("move.html", herds=herds, paddocks=paddocks, herd=query.get("herd", ""),
                          current={h["id"]: [o["paddock"] for o in f.occupying(herd=h["id"])] for h in herds})

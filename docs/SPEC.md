@@ -409,8 +409,10 @@ marked *inherited*.
 
 The occupancy intervals `(herd, paddock, start, end|open)` come from herd→paddock
 moves, merges and moves to `[[none]]`. These intervals are the grazing periods.
-A herd that is empty but still has an open occupancy gets an `empty-occupying`
-warning (D-8).
+When a herd's last animal leaves (or an anonymous herd's count reaches 0), its
+open occupancies close at that moment, so it goes idle (D-8). Animals joining
+it later don't put it back on a paddock; move it as usual. A herd moved onto a
+paddock while it has no animals gets an `empty-occupying` warning.
 
 ### 6.2.1 Head counts
 

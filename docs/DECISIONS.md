@@ -9,7 +9,7 @@ Numbers match `QUESTIONS.md` (D-n ↔ Qn, D-Rn ↔ Rn). Decided 2026-10-12.
 - **D-5** A move's right-hand side ends at the first token that isn't a link or a separator.
 - **D-6** `→` is accepted for `->`. `+>` has no Unicode form.
 - **D-7** A time with no date takes the note's date.
-- **D-8** Empty herds keep their occupancies, and get an `empty-occupying` warning.
+- **D-8** ~~Empty herds keep their occupancies, with an `empty-occupying` warning.~~ Revised 2026-10-13: when a herd's last animal leaves, it comes off its paddocks at that moment and goes idle. Splitting animals out and later moving them all back one by one shouldn't leave the empty herd on a paddock.
 - **D-9** Anonymous herds keep head-count history as dated statements (`[[Hogs]] = 12`, `[[Hogs]] -1`), because animals die. `head:` in frontmatter is gone.
 - **D-10** Effective rest is the minimum over faces. It's an MVP, to be revisited after use.
 - **D-11** Statements at the same time are ordered by path (case-insensitive), then line number.
