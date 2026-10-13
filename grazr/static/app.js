@@ -16,9 +16,9 @@ const grazr = (() => {
     return d >= 2 ? `${Math.round(d)} days` : `${Math.round(d * 24)} hours`;
   }
 
-  function baseMap(el) {
+  function baseMap(el, mapOpts = {}) {
     const cfg = JSON.parse(el.dataset.config);
-    const map = L.map(el, {zoomSnap: 0.5}).setView(cfg.center, cfg.zoom);
+    const map = L.map(el, {zoomSnap: 0.5, ...mapOpts}).setView(cfg.center, cfg.zoom);
     L.tileLayer("/tiles/{z}/{x}/{y}", {
       minZoom: cfg.min_zoom, maxZoom: 22, maxNativeZoom: cfg.max_zoom,
       attribution: "Imagery: USGS",
@@ -88,33 +88,87 @@ const grazr = (() => {
     return {map, load};
   }
 
-  /* Draw or reshape a paddock; the perimeter goes into a hidden [lat, lon] list. */
-  function drawMap(el, input, existing, others) {
-    const {map} = baseMap(el);
+  /* Draw or reshape ONE paddock; the perimeter goes into a hidden [lat, lon] list.
+     Other paddocks are shown for snapping but can't be edited (pmIgnore). No Geoman
+     toolbar: its global edit/delete modes act on every layer. */
+  function drawMap(el, input, existing, others, buttons) {
+    const {map} = baseMap(el, {doubleClickZoom: false});
+    map.pm.setLang("grazr", {tooltips: {
+      firstVertex: "Click to place the first corner",
+      continueLine: "Click to add a corner · Backspace undoes the last one",
+      finishPoly: "Click the first corner, or press Finish, to close the shape",
+    }}, "en");
     const ghost = L.featureGroup().addTo(map);
     for (const o of others || []) {
-      L.polygon(o.pts, {color: "#fff", weight: 1, fill: false, interactive: false}).bindTooltip(o.id).addTo(ghost);
+      L.polygon(o.pts, {color: "#fff", weight: 1.5, dashArray: "4 3", fill: false,
+        interactive: false, pmIgnore: true, snapIgnore: false})
+        .bindTooltip(o.id, {permanent: true, direction: "center", className: "herd-label", opacity: 0.6})
+        .addTo(ghost);
     }
+    const help = L.control({position: "topright"});
+    help.onAdd = () => L.DomUtil.create("div", "legend draw-help");
+    help.addTo(map);
+    const say = (html) => { help.getContainer().innerHTML = html; };
+
     let poly = null;
     const sync = () => {
       input.value = poly ? JSON.stringify(poly.getLatLngs()[0].map((p) => [p.lat, p.lng])) : "";
+      buttons.finish.hidden = !!poly;
+      buttons.undo.hidden = !!poly;
     };
-    const attach = (layer) => {
-      if (poly && poly !== layer) poly.remove();
+    const vertexTips = () => {
+      if (!poly || !poly.pm._markerGroup) return;
+      poly.pm._markerGroup.eachLayer((m) => {
+        if (!(m instanceof L.Marker) || m.getTooltip()) return;
+        const middle = (m.options.icon.options.className || "").includes("marker-icon-middle");
+        m.bindTooltip(middle ? "Drag to add a corner here" : "Drag to move · Right-click to delete this corner",
+          {direction: "top", offset: [0, -8]});
+      });
+    };
+    const edit = (layer) => {
       poly = layer;
-      poly.on("pm:edit", sync);
+      poly.pm.enable({allowSelfIntersection: false, removeVertexOn: "contextmenu",
+        snappable: true, snapDistance: 12, draggable: false, preventMarkerRemoval: false});
+      for (const ev of ["pm:edit", "pm:vertexadded", "pm:vertexremoved", "pm:markerdragend"]) {
+        poly.on(ev, () => { sync(); setTimeout(vertexTips, 0); });
+      }
+      poly.on("pm:intersect", () => say("<b>Edges can't cross.</b> Move the corner somewhere else."));
+      vertexTips();
       sync();
+      say("<b>Adjust the shape</b><br>Drag a corner to move it<br>Drag a small midpoint to add a corner<br>" +
+          "<b>Right-click</b> a corner to delete it<br>Then press <b>Save paddock</b>");
     };
-    map.pm.addControls({position: "topleft", drawMarker: false, drawCircleMarker: false, drawPolyline: false,
-      drawCircle: false, drawText: false, cutPolygon: false, rotateMode: false, dragMode: false});
-    map.pm.setGlobalOptions({snappable: true, snapDistance: 15});
-    map.on("pm:create", (e) => attach(e.layer));
-    map.on("pm:remove", () => { poly = null; sync(); });
+    const draw = () => {
+      if (poly) { poly.remove(); poly = null; }
+      sync();
+      map.pm.enableDraw("Polygon", {snappable: true, snapDistance: 12, allowSelfIntersection: false,
+        templineStyle: {color: "#ffeb3b"}, hintlineStyle: {color: "#ffeb3b", dashArray: "5 5"},
+        pathOptions: {color: "#ffeb3b"}});
+      say("<b>Draw the paddock</b><br>Click each corner in turn<br>Corners snap to other paddocks' edges<br>" +
+          "Click the first corner to close it");
+    };
+    map.on("pm:create", (e) => { map.pm.disableDraw(); edit(e.layer); });
+
+    buttons.restart.onclick = draw;
+    buttons.undo.onclick = () => { if (map.pm.Draw.Polygon._enabled) map.pm.Draw.Polygon._removeLastVertex(); };
+    buttons.finish.onclick = () => {
+      const d = map.pm.Draw.Polygon;
+      if (d._enabled && d._layer.getLatLngs().length >= 3) d._finishShape();
+      else say("<b>Need at least 3 corners</b> before finishing");
+    };
+    document.addEventListener("keydown", (e) => {
+      if (!map.pm.Draw.Polygon._enabled || ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      if (e.key === "Backspace") { e.preventDefault(); buttons.undo.onclick(); }
+      if (e.key === "Escape") draw();
+    });
+
     if (existing && existing.length) {
-      attach(L.polygon(existing, {color: "#ffeb3b"}).addTo(map));
-      map.fitBounds(poly.getBounds(), {padding: [40, 40], maxZoom: 19});
-    } else if (ghost.getLayers().length) {
-      map.fitBounds(ghost.getBounds(), {padding: [20, 20], maxZoom: 18});
+      const layer = L.polygon(existing, {color: "#ffeb3b", weight: 3}).addTo(map);
+      map.fitBounds(layer.getBounds(), {padding: [40, 40], maxZoom: 19});
+      edit(layer);
+    } else {
+      if (ghost.getLayers().length) map.fitBounds(ghost.getBounds(), {padding: [20, 20], maxZoom: 18});
+      draw();
     }
     return map;
   }
@@ -203,7 +257,54 @@ const grazr = (() => {
     if (pick) pick.addEventListener("change", () => { [...pick.files].forEach(upload); pick.value = ""; });
   }
 
+  /* Quick filter over a timeline: via-herd/child entries, moves, tags, text.
+     Choices are remembered per kind of page. */
+  function timelineFilter(bar) {
+    const list = document.getElementById(bar.dataset.for);
+    const items = [...list.children];
+    const viaLabel = bar.dataset.viaLabel;
+    const key = "grazr.tl." + viaLabel;
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || "{}"); } catch (e) { /* private mode */ }
+    const tagCounts = {};
+    for (const li of items) {
+      for (const t of li.dataset.tags.split(" ").filter(Boolean)) tagCounts[t] = (tagCounts[t] || 0) + 1;
+    }
+    const nVia = items.filter((li) => li.dataset.via).length;
+    const nMove = items.filter((li) => li.dataset.move).length;
+    const tags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b));
+    const check = (name, label, on) =>
+      `<label class="chip"><input type="checkbox" name="${name}" ${on ? "checked" : ""}> ${label}</label>`;
+    bar.innerHTML =
+      `<input type="search" name="q" placeholder="filter…" size="12">` +
+      (nVia ? check("via", `${esc(viaLabel)} (${nVia})`, saved.via !== false) : "") +
+      (nMove ? check("moves", `moves (${nMove})`, saved.moves !== false) : "") +
+      (tags.length ? `<span class="muted small">tags:</span>` +
+        tags.map((t) => check("tag:" + t, `#${esc(t)} (${tagCounts[t]})`, (saved.tags || []).includes(t))).join("") : "") +
+      `<span class="muted small count"></span>`;
+    const apply = () => {
+      const val = (n) => { const i = bar.querySelector(`input[name="${n}"]`); return i ? i.checked : true; };
+      const showVia = val("via"), showMoves = val("moves");
+      const want = tags.filter((t) => bar.querySelector(`input[name="tag:${CSS.escape(t)}"]`).checked);
+      const q = bar.querySelector("input[name=q]").value.trim().toLowerCase();
+      let shown = 0;
+      for (const li of items) {
+        const liTags = li.dataset.tags.split(" ");
+        const ok = (showVia || !li.dataset.via) && (showMoves || !li.dataset.move) &&
+          (!want.length || want.some((t) => liTags.includes(t))) &&
+          (!q || li.textContent.toLowerCase().includes(q));
+        li.hidden = !ok;
+        shown += ok;
+      }
+      bar.querySelector(".count").textContent = shown === items.length ? "" : `${shown} of ${items.length}`;
+      try { localStorage.setItem(key, JSON.stringify({via: showVia, moves: showMoves, tags: want})); } catch (e) { /* ignore */ }
+    };
+    bar.addEventListener("input", apply);
+    apply();
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".tl-filter").forEach(timelineFilter);
     document.querySelectorAll("textarea[data-editor]").forEach(editor);
     document.querySelectorAll("[data-check-all]").forEach((box) => {
       box.addEventListener("change", () => {

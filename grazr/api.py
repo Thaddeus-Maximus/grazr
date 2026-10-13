@@ -114,7 +114,7 @@ class Farm:
         and entries mentioning a child paddock.
         """
         q = """
-        SELECT * FROM (
+        SELECT t.*, (SELECT group_concat(tag, ' ') FROM tags WHERE entry_id = t.id) AS tags FROM (
         SELECT e.*, NULL AS via, min(x.inherited) AS inherited
           FROM mentions x JOIN entries e ON e.id = x.entry_id
          WHERE x.kind = 'entity' AND x.target = :id
@@ -134,7 +134,7 @@ class Farm:
           JOIN entries e ON e.id = x.entry_id
          WHERE c.parent = :id
            AND e.id NOT IN (SELECT entry_id FROM mentions WHERE target = :id)
-         GROUP BY e.id)
+         GROUP BY e.id) t
         ORDER BY ts IS NULL, ts DESC, path, line"""
         if limit:
             q += f" LIMIT {int(limit)}"

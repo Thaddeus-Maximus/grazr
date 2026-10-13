@@ -1,10 +1,12 @@
 {% macro elink(id) %}<a href="{{ id|eurl }}">{{ id }}</a>{% endmacro %}
 
-{% macro entry_list(entries, empty="Nothing yet.") %}
+{% macro entry_list(entries, empty="Nothing yet.", filter=None) %}
 {% if entries %}
-<ul class="entries">
+{% if filter %}<div class="tl-filter" data-for="tl" data-via-label="{{ filter }}"></div>{% endif %}
+<ul class="entries"{% if filter %} id="tl"{% endif %}>
   {% for e in entries %}
-  <li>
+  <li data-via="{{ e.via if e.via is defined and e.via else '' }}" data-move="{{ 1 if e.move_kind else '' }}"
+      data-tags="{{ e.tags if e.tags is defined and e.tags else '' }}">
     <a class="when" href="/n/{{ e.path|q }}#L{{ e.line }}" title="{{ e.path }}:{{ e.line }}">{{ e.ts|ts(e.approx) }}</a>
     {% if e.move_kind %}<span class="badge move">{{ e.move_kind }}</span>{% endif %}
     {{ e.text|inline }}

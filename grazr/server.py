@@ -163,7 +163,7 @@ class App:
 
     # --- pages ----------------------------------------------------------------
     def r_home(self, query, **_):
-        return self.page("home.html", entries=self.farm.recent(80), as_of=query.get("as_of", ""))
+        return self.page("home.html", entries=self.farm.recent(80))
 
     def _entity(self, eid, etype=None):
         row = self.farm.entity(eid)

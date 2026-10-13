@@ -13,8 +13,13 @@
 <form method="post" action="/draw" id="drawform">
 <div class="cols">
   <div>
-    <p class="muted small">Use the polygon tool (top left of the map) to click the corners, then click the first point to close it.
-      Drag the corners to adjust. Other paddocks show as white outlines, and corners snap to them.</p>
+    <p class="muted small">Instructions are on the map. Other paddocks show as dashed outlines; corners snap
+      to them, but only this paddock can be changed.</p>
+    <div class="row" style="margin-bottom:.5rem">
+      <button type="button" id="undo">Undo corner</button>
+      <button type="button" id="finish">Finish shape</button>
+      <button type="button" id="restart">Start over</button>
+    </div>
     <label for="name">Name</label>
     <input id="name" name="name" required value="{{ suggestion if grazed else (e.id if e else '') }}">
     {% if grazed %}<input type="hidden" name="copy_from" value="{{ e.id }}">{% endif %}
@@ -38,7 +43,9 @@
   const others = data.features.filter((f) => f.properties.kind === "paddock" && f.properties.id !== editing)
     .map((f) => ({id: f.properties.id, pts: f.geometry.coordinates[0].map(([lon, lat]) => [lat, lon])}));
   const existing = {{ (e.polygon if e and e.polygon else "null")|safe }};
-  grazr.drawMap(document.getElementById("map"), document.getElementById("perimeter"), existing, others);
+  const btn = (id) => document.getElementById(id);
+  grazr.drawMap(btn("map"), btn("perimeter"), existing, others,
+                {undo: btn("undo"), finish: btn("finish"), restart: btn("restart")});
   document.getElementById("drawform").addEventListener("submit", (ev) => {
     if (!document.getElementById("perimeter").value) { ev.preventDefault(); alert("Draw the paddock on the map first."); }
   });
