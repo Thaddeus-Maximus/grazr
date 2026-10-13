@@ -145,3 +145,28 @@ def test_lint_fix(web, farm):
 def test_cross_site_post_refused(web):
     status, _, _ = web("/new", {"text": "spam"}, headers={"Origin": "https://evil.example"})
     assert status == 403
+
+
+def test_backdated_note(web, farm, farm_root):
+    status, h, body = web("/new", {"text": "[[Ewe Herd]] -> [[P3]]", "tags": "", "when": "15 Dec 2025 08:00"})
+    assert status == 303, body
+    assert h["Location"] == "/n/notes/2025Dec15-0800.md"
+    assert (farm_root / "notes" / "2025Dec15-0800.md").read_text(encoding="utf-8") == "[[Ewe Herd]] -> [[P3]]\n"
+    assert farm.q1("SELECT ts FROM moves WHERE path='notes/2025Dec15-0800.md'")["ts"] == "2025-12-15T08:00"
+
+
+def test_backdated_note_date_only_is_approximate(web, farm, farm_root):
+    status, h, body = web("/new", {"text": "sheared [[orange-117]]", "when": "2026-03-02"})
+    assert status == 303, body
+    path = urllib.parse.unquote(h["Location"][3:])
+    assert (farm_root / path).read_text(encoding="utf-8").startswith("Date: 02Mar2026\n")
+    row = farm.q1("SELECT ts, approx FROM entries WHERE path=?", path)
+    assert row["ts"].startswith("2026-03-02") and row["approx"] == 1
+
+
+def test_backdated_move_and_bad_when(web, farm_root):
+    status, _, body = web("/move", {"herd": "Hogs", "paddock": ["P3"], "arrow": "->", "when": "2026-05-01T07:30"})
+    assert status == 303, body
+    assert (farm_root / "notes" / "2026May01-0730.md").read_text(encoding="utf-8") == "[[Hogs]] -> [[P3]]\n"
+    assert web("/new", {"text": "x", "when": "the day after the storm"})[0] == 400
+    assert web("/new", {"text": "x", "when": "2099-01-01"})[0] == 400

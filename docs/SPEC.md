@@ -508,8 +508,8 @@ renamed into place, so a file is never half-written.
 
 | Action | What it writes |
 |---|---|
-| New note | `notes/<now>.md` in the `note_filename` format, containing the tag line and the text. The editor autocompletes `[[` from entity IDs and `#` from existing tags. |
-| Move herd | A move line (`->` or `+>`) in a new note. The form picks a herd, picks paddocks on the map or from a list, and takes an optional time and comment. |
+| New note | `notes/<when>.md` in the `note_filename` format, containing the tag line and the text. `when` defaults to now and can be backdated ("15 Dec 2025", "yesterday 6pm"); a date with no time adds a `Date:` line so the entries are approximate. Future times are refused. The editor autocompletes `[[` from entity IDs and `#` from existing tags. |
+| Move herd | A move line (`->` or `+>`) in a new note, named by the move's time (backdating works as for a new note). The form picks a herd, picks paddocks on the map or from a list, and takes an optional time and comment. |
 | Move animals | A multi-select on a herd page or in the animal list, plus a destination herd. It writes one membership line. |
 | New animal / herd | A new entity file from series defaults. |
 | Edit properties | A frontmatter form. It reads the file again at save time and rewrites only the frontmatter, so body edits made in Obsidian survive. |

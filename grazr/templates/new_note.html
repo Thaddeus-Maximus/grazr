@@ -8,6 +8,9 @@
 <form method="post" action="/new">
   <div class="editor-wrap"><textarea id="text" name="text" rows="12" data-editor autofocus>{{ text }}</textarea></div>
   <div class="row" style="margin-top:.5rem">
+    <label for="when" style="margin:0">When</label>
+    <input id="when" name="when" value="{{ when }}" placeholder="now — or 15 Dec 2025, yesterday 6pm" size="30"
+           title="Leave blank for now. A date alone is saved as approximate.">
     <label for="tags" style="margin:0">Tags</label><input id="tags" name="tags" value="{{ tags }}" placeholder="sheep vet" size="24">
     <label class="row" style="margin:0;font-weight:normal">Add photo <input type="file" accept="image/*" multiple data-upload-for="text"></label>
     <button class="primary" style="margin-left:auto">Save note</button>

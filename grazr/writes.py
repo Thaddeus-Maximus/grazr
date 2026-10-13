@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from ruamel.yaml import YAML
@@ -32,20 +32,22 @@ def under(root: Path, rel: str) -> Path:
     return p
 
 
-def when_prefix(when: datetime | None, now: datetime) -> str:
-    if when is None or abs((when - now).total_seconds()) < 60:
-        return ""
-    return "@" + when.strftime("%d%b%Y-%H%M") + " "
-
-
 def link(i: str) -> str:
     return f"[[{i}]]"
 
 
-def new_note(root: Path, config, text: str, tags: list[str] = (), now: datetime | None = None) -> str:
-    """Write `notes/<now>.md`; → its root-relative path."""
+def new_note(root: Path, config, text: str, tags: list[str] = (), when: datetime | None = None,
+             approx: bool = False, now: datetime | None = None) -> str:
+    """Write `notes/<when>.md` (default: now); → its root-relative path.
+
+    A backdated note is named by its own time, like one written then. When only
+    the day is known (`approx`), a `Date:` line marks its entries as approximate.
+    """
     now = now or datetime.now()
-    stem = now.strftime(config["note_filename"])
+    when = when or now
+    if when > now + timedelta(minutes=5):
+        raise WriteError(f"{when:%d %b %Y %H:%M} is in the future")
+    stem = when.strftime(config["note_filename"])
     folder = root / "notes"
     path = folder / f"{stem}.md"
     n = 2
@@ -53,6 +55,8 @@ def new_note(root: Path, config, text: str, tags: list[str] = (), now: datetime 
         path = folder / f"{stem}-{n}.md"
         n += 1
     body = text.strip("\n") + "\n"
+    if approx:
+        body = f"Date: {when:%d%b%Y}\n" + body
     tags = [t.lstrip("#") for t in tags if t.strip("# ")]
     if tags:
         body = " ".join("#" + t for t in tags) + "\n" + body
@@ -60,14 +64,12 @@ def new_note(root: Path, config, text: str, tags: list[str] = (), now: datetime 
     return path.relative_to(root).as_posix()
 
 
-def move_line(left: list[str], right: list[str], arrow: str = "->", comment: str = "",
-              when: datetime | None = None, now: datetime | None = None) -> str:
+def move_line(left: list[str], right: list[str], arrow: str = "->", comment: str = "") -> str:
     if arrow not in ("->", "+>"):
         raise WriteError("arrow must be -> or +>")
     if not left or not right:
         raise WriteError("pick something to move and somewhere to move it")
-    now = now or datetime.now()
-    line = f"{when_prefix(when, now)}{', '.join(map(link, left))} {arrow} {', '.join(map(link, right))}"
+    line = f"{', '.join(map(link, left))} {arrow} {', '.join(map(link, right))}"
     return line + (f" {comment.strip()}" if comment.strip() else "")
 
 

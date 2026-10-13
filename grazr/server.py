@@ -17,7 +17,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 
 from . import frontmatter, tiles, writes
 from .api import Farm, fields, fix_json, gone, parse_ts
-from .dates import parse_when
+from .dates import Stamp, parse_when
 from .index import TS
 from .render import Renderer
 from .writes import WriteError
@@ -321,26 +321,32 @@ class App:
         raise Redirect("/lint" + ("?all=1" if form.get("all") else ""))
 
     # --- writes ---------------------------------------------------------------
-    def _when(self, form) -> datetime | None:
+    def _when(self, form) -> tuple[datetime | None, bool]:
+        """The form's `when` → (time or None for now, whether only the day is known)."""
         raw = (form.get("when") or "").strip()
         if not raw:
-            return None
-        if "T" in raw:      # <input type=datetime-local>
-            return datetime.strptime(raw[:16], TS)
-        s = parse_when(raw, None)
+            return None, False
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?", raw):   # <input type=datetime-local>
+            return datetime.strptime(raw[:16], TS), False
+        s = parse_when(raw, Stamp(datetime.now()))
         if s is None:
-            raise WriteError(f"can't read time {raw!r}")
-        return s.dt
+            raise WriteError(f"can't read the time {raw!r}; try e.g. 15 Dec 2025, 2025-12-15 8:00 or yesterday 6pm")
+        return s.dt, s.approx
+
+    def _note(self, text: str, form, tags=()) -> str:
+        when, approx = self._when(form)
+        return writes.new_note(self.farm.root, self.farm.config, text, tags, when, approx)
 
     def r_new_note(self, query, **_):
-        return self.page("new_note.html", text=query.get("text", ""), tags=query.get("tags", ""))
+        return self.page("new_note.html", text=query.get("text", ""), tags=query.get("tags", ""),
+                         when=query.get("when", ""))
 
     def r_new_note_save(self, form, **_):
         text = form.get("text", "").strip()
         if not text:
             raise WriteError("the note is empty")
         tags = (form.get("tags") or "").replace(",", " ").split()
-        path = writes.new_note(self.farm.root, self.farm.config, text, tags)
+        path = self._note(text, form, tags)
         self.farm.refresh()
         raise Redirect(form.get("next") or f"/n/{quote(path)}")
 
@@ -358,8 +364,7 @@ class App:
             pads, arrow = ["none"], "->"
         else:
             arrow = form.get("arrow", "->")
-        line = writes.move_line(herds, pads, arrow, form.get("comment", ""), self._when(form))
-        writes.new_note(self.farm.root, self.farm.config, line)
+        self._note(writes.move_line(herds, pads, arrow, form.get("comment", "")), form)
         self.farm.refresh()
         raise Redirect(entity_url(herds[0], "herds") if len(herds) == 1 else "/")
 
@@ -373,8 +378,7 @@ class App:
                 raise WriteError(f"there is no herd called {dest!r}; tick “create it”")
             writes.new_entity(self.farm.root, "herds", dest,
                               {"species": form.get("species") or None})
-        line = writes.move_line(animals, [dest], "->", form.get("comment", ""), self._when(form))
-        writes.new_note(self.farm.root, self.farm.config, line)
+        self._note(writes.move_line(animals, [dest], "->", form.get("comment", "")), form)
         self.farm.refresh()
         raise Redirect(form.get("next") or entity_url(dest, "herds"))
 
