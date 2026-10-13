@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from . import frontmatter, tiles, writes
-from .api import Farm, fields, fix_json, parse_ts
+from .api import Farm, fields, fix_json, gone, parse_ts
 from .dates import parse_when
 from .index import TS
 from .render import Renderer
@@ -49,8 +49,8 @@ class App:
         self.env = Environment(loader=PackageLoader("grazr", "templates"),
                                autoescape=select_autoescape(["html"]), trim_blocks=True,
                                lstrip_blocks=True)
-        self.env.globals.update(app=self, fields=fields, now=datetime.now)
-        self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl,
+        self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone)
+        self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
                                 q=lambda s: quote(str(s)))
@@ -61,6 +61,10 @@ class App:
         if r.kind == "entity":
             return entity_url(r.id, r.etype)
         return f"/search?q={quote(eid)}"
+
+    def etype(self, eid: str) -> str:
+        r = self.farm.resolver().resolve(eid)
+        return r.etype if r.kind == "entity" else r.kind
 
     def href(self, target: str):
         r = self.farm.resolver().resolve(target)
@@ -192,7 +196,7 @@ class App:
             pedigree=f.pedigree(row["id"], 4), lambing=f.lambing(row["id"]),
             offspring=f.offspring(row["id"]),
             history=f.q("SELECT * FROM memberships WHERE animal=? ORDER BY start DESC", row["id"]),
-            left=row["left_on"] and row["left_on"] <= datetime.now().date().isoformat())
+            left=gone(row), exit=f.exit(row["id"]))
 
     def r_herd(self, eid, **_):
         f = self.farm
@@ -234,7 +238,7 @@ class App:
         out = []
         for r in rows:
             fl = fields(r)
-            if etype == "animals" and not show_all and r["left_on"] and r["left_on"] <= today:
+            if etype == "animals" and not show_all and gone(r, today):
                 continue
             if etype == "herds" and not show_all and f.idle(r):
                 continue
@@ -262,7 +266,7 @@ class App:
         for r in out:
             if etype == "animals":
                 m = f.membership(r["id"])
-                extra[r["id"]] = {"herd": m["herd"] if m else None}
+                extra[r["id"]] = {"herd": m["herd"] if m else None, "exit": f.exit(r["id"])}
             elif etype == "herds":
                 extra[r["id"]] = {"size": f.herd_size(r),
                                   "paddocks": [o["paddock"] for o in f.occupying(herd=r["id"])]}

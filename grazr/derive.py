@@ -57,12 +57,27 @@ class MoveRec:
 
 
 @dataclass
+class ExitRec:
+    animal: str
+    dt: datetime
+    kind: str
+    weight: float | None
+    unit: str | None
+    basis: str | None
+    cause: str | None
+    path: str
+    line: int
+
+
+@dataclass
 class Derived:
     memberships: list[Membership] = field(default_factory=list)
     occupancies: list[Occupancy] = field(default_factory=list)
     heads: list[HeadCount] = field(default_factory=list)
     moves: list[MoveRec] = field(default_factory=list)
     birth_types: dict[str, int] = field(default_factory=dict)
+    exits: list[ExitRec] = field(default_factory=list)
+    left_at: dict[str, datetime] = field(default_factory=dict)   # effective departure
     warnings: list[Warning] = field(default_factory=list)
 
 
@@ -139,7 +154,9 @@ def derive(entities: dict[str, Entity], entries: list[Entry],
         seq += 1
 
     animals = {k: e for k, e in entities.items() if e.type == "animals"}
+    _exits(animals, entries, resolve, out)
     dams: dict[str, str] = {}
+    st.left_at = out.left_at
     for aid, a in animals.items():
         if a.dam:
             r = resolve(a.dam)
@@ -147,8 +164,8 @@ def derive(entities: dict[str, Entity], entries: list[Entry],
                 dams[aid] = r.id
         if a.born and aid in dams:
             add(_day(a.born), "", 0, "born", aid)
-        if a.left:
-            add(_day(a.left), "", 0, "left", aid)
+        if aid in out.left_at:
+            add(out.left_at[aid], "", 0, "left", aid)
 
     for e in entries:
         if e.stamp is None:
@@ -245,9 +262,9 @@ def _apply_move(st: _State, e: Entry, t: datetime, resolve, warn):
             return
         moved = []
         for a in L:
-            left_on = ent[a].left
-            if left_on is not None and t >= _day(left_on):
-                warn(e, "move-after-left", f"{a} left on {left_on}")
+            left_at = st.left_at.get(a)
+            if left_at is not None and t >= left_at:
+                warn(e, "move-after-left", f"{a} left on {left_at:%d %b %Y}")
                 continue
             st.explicit.add(a)
             st.following.pop(a, None)
@@ -276,6 +293,36 @@ def _apply_move(st: _State, e: Entry, t: datetime, resolve, warn):
             return ", ".join(sorted(rs))
         warn(e, "move-types",
              f"can't move {names(lt)} to {names(rt)}" + ("" if len(R) == 1 else " (one destination herd)"))
+
+
+def _exits(animals: dict[str, Entity], entries: list[Entry], resolve, out: Derived):
+    """Exit statements and `left:` fields → each animal's departure (spec §5.3.1).
+
+    The earlier of the two wins; if both exist and differ by more than a day,
+    that's a `left-conflict`.
+    """
+    for e in sorted((x for x in entries if x.exit is not None and x.stamp is not None),
+                    key=lambda x: (x.stamp.dt, x.path.casefold(), x.line)):
+        for t in e.exit.targets:
+            r = resolve(t)
+            if r.kind != "entity" or r.etype != "animals":
+                continue
+            if any(x.animal == r.id for x in out.exits):
+                out.warnings.append(Warning(e.path, e.line, "exit-twice",
+                                            f"{r.id} already {next(x.kind for x in out.exits if x.animal == r.id)}"))
+                continue
+            out.exits.append(ExitRec(r.id, e.stamp.dt, e.exit.kind, e.exit.weight, e.exit.unit,
+                                     e.exit.basis, e.exit.cause, e.path, e.line))
+    by_animal = {x.animal: x for x in out.exits}
+    for aid, a in animals.items():
+        ex = by_animal.get(aid)
+        field_dt = _day(a.left) if a.left else None
+        if ex and field_dt and abs((ex.dt - field_dt).total_seconds()) > 86400:
+            out.warnings.append(Warning(a.path, 1, "left-conflict",
+                                        f"`left: {a.left}` but {ex.kind} on {ex.dt:%d %b %Y} ({ex.path}:{ex.line})"))
+        dts = [d for d in (field_dt, ex.dt if ex else None) if d is not None]
+        if dts:
+            out.left_at[aid] = min(dts)
 
 
 def birth_types(animals: dict[str, Entity], dams: dict[str, str]) -> dict[str, int]:

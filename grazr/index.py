@@ -18,8 +18,9 @@ from .model import Entity, build as build_entity
 from .parse import IMAGE_EXT, Note, Warning, find_images, parse_note
 from .paths import iter_markdown, rel, state_dir
 
-SCHEMA = 4
+SCHEMA = 6
 TS = "%Y-%m-%dT%H:%M"
+UNKNOWN = "unknown"   # entities.left_on for `left: unknown`
 
 DDL = """
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -37,6 +38,7 @@ CREATE TABLE images (entry_id INTEGER, entity TEXT, name TEXT, path TEXT);
 CREATE TABLE moves (path TEXT, line INTEGER, ts TEXT, kind TEXT, lhs TEXT, rhs TEXT);
 CREATE TABLE memberships (animal TEXT, herd TEXT, start TEXT, end TEXT, inherited INTEGER, path TEXT, line INTEGER);
 CREATE TABLE occupancies (herd TEXT, paddock TEXT, start TEXT, end TEXT, path TEXT, line INTEGER);
+CREATE TABLE exits (animal TEXT PRIMARY KEY, ts TEXT, kind TEXT, weight REAL, unit TEXT, basis TEXT, cause TEXT, path TEXT, line INTEGER);
 CREATE TABLE heads (herd TEXT, count INTEGER, start TEXT, end TEXT, path TEXT, line INTEGER);
 CREATE TABLE faces (id INTEGER PRIMARY KEY, geojson TEXT, acres REAL);
 CREATE TABLE face_paddocks (face_id INTEGER, paddock TEXT);
@@ -161,7 +163,7 @@ class Index:
                 geo.check(ent)
             parsed = ent
         else:
-            parsed = parse_note(r, text, self.animal_ids)
+            parsed = parse_note(r, text, self.animal_ids, tuple(self.config["exit_words"]))
         self.cache[r] = _Cached(s.st_mtime, s.st_size, kind, etype, text, parsed)
 
     # --- rebuild ---------------------------------------------------------
@@ -277,7 +279,9 @@ class Index:
             p = polys.get(e.id)
             ent_rows.append((
                 e.id, e.type, e.path, json.dumps(e.fields, default=str), e.body,
-                str(e.born) if e.born else None, str(e.left) if e.left else None,
+                str(e.born) if e.born else None,
+                der.left_at[e.id].date().isoformat() if e.id in der.left_at
+                else UNKNOWN if e.left_unknown else None,
                 rid(e.dam), rid(e.sire), rid(e.parent), int(e.anonymous),
                 der.birth_types.get(e.id), geo.acres(p) if p is not None else None,
                 json.dumps(e.perimeter) if e.perimeter else None))
@@ -339,6 +343,8 @@ class Index:
                             for m in der.memberships],
             "occupancies": [(o.herd, o.paddock, ts(o.start), ts(o.end), o.path, o.line)
                             for o in der.occupancies],
+            "exits": [(x.animal, ts(x.dt), x.kind, x.weight, x.unit, x.basis, x.cause, x.path, x.line)
+                      for x in der.exits],
             "heads": [(h.herd, h.count, ts(h.start), ts(h.end), h.path, h.line) for h in der.heads],
             "faces": face_rows,
             "face_paddocks": fp_rows,

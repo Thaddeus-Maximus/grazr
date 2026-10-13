@@ -8,12 +8,18 @@ from pathlib import Path
 
 from . import geo, migrate
 from .ids import Resolver
-from .index import TS, Index
+from .index import TS, UNKNOWN, Index
 from .paths import atomic_write
 
 
 def parse_ts(s: str | None) -> datetime | None:
     return datetime.strptime(s, TS) if s else None
+
+
+def gone(row, today: str | None = None) -> bool:
+    """Has this animal left (dated, or `left: unknown`)?"""
+    left = row["left_on"]
+    return bool(left) and (left == UNKNOWN or left <= (today or datetime.now().date().isoformat()))
 
 
 def fields(row) -> dict:
@@ -182,6 +188,7 @@ class Farm:
         return self.q("""SELECT e.*, m.start AS joined, m.inherited FROM memberships m
                          JOIN entities e ON e.id = m.animal
                          WHERE m.herd = ? AND m.start <= ? AND (m.end IS NULL OR m.end > ?)
+                           AND (e.left_on IS NULL OR e.left_on != 'unknown')
                          ORDER BY e.id COLLATE NOCASE""", herd, t, t)
 
     def head(self, herd: str, at: datetime | None = None) -> int | None:
@@ -223,6 +230,10 @@ class Farm:
             node["sire"] = self.pedigree(row["sire"], depth - 1)
         return node
 
+    def exit(self, eid: str):
+        """How and when an animal left (`[[x]] slaughtered 66 lb hanging`), if recorded."""
+        return self.q1("SELECT * FROM exits WHERE animal = ?", eid)
+
     def offspring(self, eid: str):
         return self.q("""SELECT * FROM entities WHERE type='animals' AND (dam = ? OR sire = ?)
                          ORDER BY born, id""", eid, eid)
@@ -238,7 +249,7 @@ class Farm:
             out.append({"year": y, "lambs": [{
                 "id": r["id"], "born": r["born"], "sex": fields(r).get("sex"),
                 "birth_type": r["birth_type"],
-                "active": not (r["left_on"] and r["left_on"] <= today)} for r in lambs]})
+                "active": not gone(r, today)} for r in lambs]})
         return out
 
     # --- paddocks: rest (§6.3) ----------------------------------------------

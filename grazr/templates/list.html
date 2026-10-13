@@ -43,7 +43,7 @@
   {% for r in rows %}{% set f = fields(r) %}{% set x = extra.get(r.id, {}) %}
   <tr>
     {% if etype == "animals" %}<td><input type="checkbox" name="animal" value="{{ r.id }}"></td>{% endif %}
-    <td>{{ elink(r.id) }}{% if r.left_on %} <span class="badge left">left</span>{% endif %}</td>
+    <td>{{ elink(r.id) }}{% if gone(r) %} <span class="badge left">{{ x.exit.kind if x.exit else "left" }}</span>{% endif %}</td>
     {% if etype == "animals" %}<td>{% if x.herd %}{{ elink(x.herd) }}{% endif %}</td>
     {% elif etype == "herds" %}<td>{{ x.size if x.size is not none else "" }}{% if r.anonymous %} head{% endif %}</td>
       <td>{% for p in x.paddocks %}{{ elink(p) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>

@@ -33,6 +33,8 @@ grazr server                   # http://127.0.0.1:8714
 [[orange-010]], [[blue-007]] -> [[Hospital]] move animals between herds
 [[Hospital]] -> [[none]]                     take a herd off every paddock
 [[Hogs]] = 12                                head count (anonymous herds)
+[[blue-003]] slaughtered 69 lb hanging       an animal leaves (died, sold, ...)
+[[orange-002]] died of bloat                 ... with a cause
 @yesterday 6pm [[o 117]] limping #vet        back-dated entry
 ```
 

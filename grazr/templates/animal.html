@@ -14,7 +14,8 @@
 <div class="titlebar">
   <h1>{{ e.id }}</h1>
   {% if f.name %}<span class="muted">{{ f.name }}</span>{% endif %}
-  {% if left %}<span class="badge left">left {{ e.left_on }}</span>{% endif %}
+  {% if exit %}<span class="badge left">{{ exit.kind }} {{ exit.ts|ts }}</span>
+  {% elif left %}<span class="badge left">left {{ "(date unknown)" if e.left_on == "unknown" else e.left_on }}</span>{% endif %}
   {% if f.status %}<span class="badge">{{ f.status }}</span>{% endif %}
   <div class="actions">
     <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
@@ -29,6 +30,10 @@
       <p>In {{ elink(membership.herd) }} since {{ membership.start|ts }}{% if membership.inherited %} <span class="badge via">with dam</span>{% endif %}
       {% if paddocks %} · on {% for o in paddocks %}{{ elink(o.paddock) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
       {% elif not left %}<p class="muted">Not in any herd. Tick it in the <a href="/animals">animals list</a> to move it, or write <code>[[{{ e.id }}]] -> [[Herd]]</code>.</p>{% endif %}
+      {% if exit %}<p><b>{{ exit.kind|capitalize }}</b> {{ exit.ts|ts }}
+        {%- if exit.weight %} · {{ "%g"|format(exit.weight) }} {{ exit.unit }}{% if exit.basis %} {{ exit.basis }}{% endif %}{% endif %}
+        {%- if exit.cause %} · {{ exit.cause|inline }}{% endif %}
+        <a class="src" href="/n/{{ exit.path|q }}#L{{ exit.line }}">source</a></p>{% endif %}
       {% if e.born %}<p>Born {{ e.born }}{% if e.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet", 4: "quad"}.get(e.birth_type, e.birth_type ~ "-birth") }}{% endif %}</p>{% endif %}
       {{ prop_list(f) }}
       {% if body %}<div class="note" style="margin-top:.8rem">{{ body }}</div>{% endif %}

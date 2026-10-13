@@ -1,4 +1,4 @@
-{% macro elink(id) %}<a href="{{ id|eurl }}">{{ id }}</a>{% endmacro %}
+{% macro elink(id) %}<a class="link {{ id|etype }}" href="{{ id|eurl }}">{{ id }}</a>{% endmacro %}
 
 {% macro entry_list(entries, empty="Nothing yet.", filter=None) %}
 {% if entries %}

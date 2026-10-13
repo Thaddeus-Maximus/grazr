@@ -115,7 +115,7 @@ derived depends on it.
 |---|---|---|
 | animal | `dam`, `sire` | lineage, offspring, birth type, lamb-follows-dam |
 | animal | `born` | lamb membership start, birth type |
-| animal | `left` | ends membership; hides the animal by default |
+| animal | `left` | ends membership; hides the animal by default. A date, or `unknown` when it's gone but the date isn't recorded. Usually derived from an exit statement (§5.3.1) instead |
 | animal | `birth_type` | override for a derived value |
 | herd | `anonymous` | a herd with no individual animals, only a head count (§5.3) |
 | paddock | `perimeter` | geometry, area, rest days |
@@ -332,7 +332,30 @@ has no effect.
 ```
 
 A merge adds the left herd's count to the right herd's. A count that goes
-negative is a lint warning. To put one ewe in a jug, move her into a herd such as `[[Hospital]]`
+negative is a lint warning.
+
+### 5.3.1 Exits
+
+How an animal left is a dated statement too: one or more animal links, then an
+exit word, then optionally a weight and a cause.
+
+```
+@31May2026 [[blue-003]] slaughtered 69 lb hanging
+[[orange-002]] died of bloat
+[[blue-012]] died, crushed by ewe
+[[blue-007]], [[blue-008]] sold 95 lb live
+```
+
+- Exit words are set in `grazr.yaml` as `exit_words` (default: died, dead,
+  slaughtered, butchered, processed, sold, culled).
+- The weight is a number, `lb` or `kg`, and an optional basis: live, hanging,
+  hot, carcass or dressed.
+- The cause is the text after `of`, `from`, a comma, a colon or a dash, up to
+  the end of the sentence. `found [[x]] dead in [[Pitts]]` has no cause.
+- The statement's time ends the animal's membership and hides it, like `left`.
+  If both an exit and a `left:` date exist, the earlier wins; if they differ by
+  more than a day, that's a `left-conflict` warning. A second exit for the same
+  animal is an `exit-twice` warning. To put one ewe in a jug, move her into a herd such as `[[Hospital]]`
 and move that herd to the jug. A herd may occupy several paddocks at once, and
 several herds may occupy one paddock (Q42).
 
@@ -545,6 +568,9 @@ The server and the CLI both call one shared `api` module, as in slimpdm.
 | `shorthand-link` | A link uses a shorthand animal spelling (`[[o 010]]`); fixable. |
 | `empty-occupying` | A herd has no members but still occupies a paddock. |
 | `negative-head` | A head count goes below zero. |
+| `left-conflict` | An animal's `left:` date and its exit statement disagree. |
+| `exit-twice` | A second exit statement for the same animal. |
+| `left-unknown` | `left: unknown`: gone, but the date isn't recorded (informational). |
 | `bad-perimeter` | The polygon has fewer than 3 points, crosses itself, or has bad coordinates. |
 | `missing-image` | An embedded image wasn't found. |
 | `bad-frontmatter` | The YAML doesn't parse, or a **structural** field has the wrong type (e.g. `born` isn't a date). Free fields are never checked. |
@@ -612,8 +638,8 @@ These were each answered "no" or "not yet":
 ## 14. Open questions (decide when they come up)
 
 1. *(Resolved: head counts are dated statements, §5.3.)*
-2. **Lifecycle events** (Q28). v1 has only the structural `left` date, plus free text in `status` and in notes.
-   Add note-level syntax for birth, weaning, castration or sale only if something derived needs it.
+2. **Lifecycle events** (Q28). Exits (death, slaughter, sale) are statements (§5.3.1). Add note-level
+   syntax for birth, weaning or castration only if something derived needs it.
 3. **Breeding records** (Q32). Ram-in and ram-out could just be moves of the ram
    into and out of a herd. If so, expected lambing windows can be derived from
    membership with no new syntax.

@@ -19,6 +19,7 @@ class Entity:
     # structural, validated
     born: date | None = None
     left: date | None = None
+    left_unknown: bool = False   # `left: unknown`: gone, date not recorded
     dam: str | None = None    # raw link target; resolved by the index
     sire: str | None = None
     parent: str | None = None
@@ -66,7 +67,12 @@ def build(eid: str, etype: str, path: str, fields: dict, body: str, body_line: i
     e = Entity(eid, etype, path, fields, body, body_line)
     if etype == "animals":
         e.born = _date(e, "born")
-        e.left = _date(e, "left")
+        lv = fields.get("left")
+        if lv is True or (isinstance(lv, str) and lv.strip().lower() in ("unknown", "yes", "?")):
+            e.left_unknown = True
+            e.warnings.append(Warning(path, 1, "left-unknown", "left on an unknown date", "info"))
+        else:
+            e.left = _date(e, "left")
         e.dam = link_value(fields.get("dam"))
         e.sire = link_value(fields.get("sire"))
         bt = fields.get("birth_type")

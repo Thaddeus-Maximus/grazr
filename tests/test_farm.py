@@ -91,3 +91,27 @@ def test_bad_moves(farm, farm_root):
     codes = {(w["line"], w["code"]) for w in farm.warnings()
              if w["path"] == "notes/2026Oct14-0800.md"}
     assert codes == {(1, "move-types"), (2, "move-unknown"), (3, "move-after-left")}
+
+
+def test_exit_statement_ends_membership(farm, farm_root):
+    (farm_root / "notes" / "2026Oct13-0900.md").write_text(
+        "[[orange-010]] died of bloat, 40 lb\n", encoding="utf-8")
+    farm.refresh()
+    x = farm.exit("orange-010")
+    assert (x["kind"], x["cause"], x["weight"], x["ts"]) == ("died", "bloat", 40, "2026-10-13T09:00")
+    assert farm.entity("orange-010")["left_on"] == "2026-10-13"
+    m = rows(farm, "SELECT end FROM memberships WHERE animal='orange-010'")
+    assert m == [("2026-10-13T09:00",)]
+
+
+def test_left_unknown_and_conflict(farm, farm_root):
+    p = farm_root / "animals" / "orange-011.md"
+    p.write_text(p.read_text(encoding="utf-8").replace("cull:", "left: unknown\ncull:"), encoding="utf-8")
+    p = farm_root / "animals" / "blue-007.md"
+    (farm_root / "notes" / "2026Oct13-0900.md").write_text("[[blue-007]] slaughtered 60 lb hanging\n", encoding="utf-8")
+    farm.refresh()
+    assert farm.entity("orange-011")["left_on"] == "unknown"
+    assert "orange-011" not in [m["id"] for m in farm.members("Hospital")]
+    codes = {w["code"] for w in farm.warnings(include_info=True)}
+    assert {"left-unknown", "left-conflict"} <= codes      # blue-007 has left: 2026-09-01
+    assert farm.entity("blue-007")["left_on"] == "2026-09-01"   # the earlier date wins

@@ -20,6 +20,8 @@ DEFAULTS = {
     "tiles": {"source": "usgs-imagery", "min_zoom": 13, "max_zoom": 19},
     "attachment_dirs": ["attachments"],
     "series": {},
+    # words that end an animal's time on the farm: `[[x]] slaughtered 66 lb hanging`
+    "exit_words": ["died", "dead", "slaughtered", "butchered", "processed", "sold", "culled"],
     "types": {},
 }
 

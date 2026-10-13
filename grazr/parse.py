@@ -52,6 +52,25 @@ class Head:
     n: int
 
 
+EXIT_WORDS = ("died", "dead", "slaughtered", "butchered", "processed", "sold", "culled")
+WEIGHT = re.compile(r"(\d+(?:\.\d+)?)\s*(lb|lbs|kg)\b\.?(?:\s+(live|hanging|hot|carcass|dressed))?", re.I)
+
+
+# `died of bloat`, `died, crushed by ewe`, `dead — coyote`: up to the end of the sentence
+CAUSE = re.compile(r"\s*(?:(?:of|from)\b|,|:|-|–|—)\s*([^.;#]+)", re.I)
+
+
+@dataclass
+class Exit:
+    """`[[a]], [[b]] slaughtered 66 lb hanging` (spec §5.3.1)."""
+    targets: list[str]
+    kind: str               # the exit word, lower case
+    weight: float | None = None
+    unit: str | None = None
+    basis: str | None = None  # live, hanging, ...
+    cause: str | None = None  # "bloat" in `[[x]] died of bloat`
+
+
 @dataclass
 class Entry:
     path: str
@@ -64,6 +83,7 @@ class Entry:
     images: list[str] = field(default_factory=list)
     move: Move | None = None
     head: Head | None = None
+    exit: Exit | None = None
     parent_line: int | None = None
     bare: list[tuple[int, int, str]] = field(default_factory=list)  # unlinked IDs
 
@@ -156,7 +176,40 @@ def find_head(text: str) -> Head | None:
     return Head(link_target(m.group(1)), m.group(3), int(m.group(4)))
 
 
-def parse_note(path: str, text: str, animal_ids: AnimalIds | None = None) -> Note:
+def find_exit(text: str, words=EXIT_WORDS) -> Exit | None:
+    """Animal links, then an exit word: `[[x]] died`, `[[a]] and [[b]] sold 95 lb live`."""
+    links = list(LINK.finditer(text))
+    if not links:
+        return None
+    alt = "|".join(re.escape(w) for w in words)
+    for i in range(len(links)):
+        targets = [link_target(links[i].group(1))]
+        end = links[i].end()
+        j = i + 1
+        while j < len(links) and SEP.match(text[end:links[j].start()]):
+            targets.append(link_target(links[j].group(1)))
+            end = links[j].end()
+            j += 1
+        m = re.match(rf"\s*,?\s*(?:was\s+|were\s+|got\s+)?({alt})\b", text[end:], re.I)
+        if m:
+            ex = Exit(targets, m.group(1).lower())
+            rest = text[end + m.end():]
+            w = WEIGHT.search(rest)
+            if w:
+                ex.weight = float(w.group(1))
+                ex.unit = "kg" if w.group(2).lower() == "kg" else "lb"
+                ex.basis = w.group(3).lower() if w.group(3) else None
+                rest = rest[:w.start()] + rest[w.end():]
+            c = CAUSE.match(rest)
+            if c:
+                cause = TAG.sub("", c.group(1)).strip(" ,;:-–—")
+                ex.cause = cause or None
+            return ex
+    return None
+
+
+def parse_note(path: str, text: str, animal_ids: AnimalIds | None = None,
+               exit_words=EXIT_WORDS) -> Note:
     stem = path.rsplit("/", 1)[-1]
     stem = stem[:-3] if stem.lower().endswith(".md") else stem
     note_stamp = dates.parse_filename(stem)
@@ -245,6 +298,8 @@ def parse_note(path: str, text: str, animal_ids: AnimalIds | None = None) -> Not
         e.move = find_move(content)
         if e.move is None:
             e.head = find_head(content)
+            if e.head is None:
+                e.exit = find_exit(content, exit_words)
         if parent is not None:
             e.parent_line = parent.line
             e.inherited = [l for l in parent.links + parent.inherited if l not in e.links]

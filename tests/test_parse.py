@@ -64,3 +64,15 @@ def test_undated_and_bad_date():
 def test_code_blocks_skipped():
     n = parse_note("notes/2026Oct12-0707.md", "```\n[[a]] -> [[b]]\n```\nreal")
     assert [e.text for e in n.entries] == ["real"]
+
+
+def test_exits():
+    from grazr.parse import find_exit
+    e = find_exit("[[blue-003]] slaughtered 69 lb hanging")
+    assert (e.targets, e.kind, e.weight, e.unit, e.basis, e.cause) == (["blue-003"], "slaughtered", 69, "lb", "hanging", None)
+    e = find_exit("[[a]], [[b]] died, crushed by ewe. sad #vet")
+    assert (e.targets, e.kind, e.cause) == (["a", "b"], "died", "crushed by ewe")
+    assert find_exit("[[o]] died of bloat").cause == "bloat"
+    assert find_exit("found [[x]] dead in [[Pitts]]").cause is None
+    assert find_exit("[[a]] limping, dead tired") is None
+    assert find_exit("[[Ewe Herd]] fed") is None
