@@ -57,16 +57,6 @@ const grazr = (() => {
     };
     legend.addTo(map);
 
-    // Herd labels are links. Open them directly rather than relying on Leaflet's
-    // tooltip interactivity, and keep the click from reaching the paddock below.
-    el.addEventListener("click", (e) => {
-      const a = e.target.closest(".leaflet-tooltip a[href]");
-      if (!a) return;
-      e.preventDefault();
-      e.stopPropagation();
-      window.location.href = a.href;
-    }, true);
-
     async function load(asOf) {
       const res = await fetch("/api/map" + (asOf ? "?as_of=" + asOf : ""));
       const data = await res.json();
@@ -98,8 +88,8 @@ const grazr = (() => {
         onEachFeature: (f, l) => {
           const p = f.properties;
           if (p.herds.length) {
-            l.bindTooltip(herdLinks(p.herds), {permanent: true, direction: "center", className: "herd-label",
-              interactive: true});
+            // plain labels; clicks go through to the paddock, whose popup links the herds
+            l.bindTooltip(p.herds.map(esc).join(", "), {permanent: true, direction: "center", className: "herd-label"});
           }
         },
       }).addTo(layer);
