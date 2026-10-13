@@ -4,14 +4,7 @@
   --tag: #6b4fb3; --chip: #eef2ec; --code: #f2f0ea;
   --paddock: #2e7d32; --animal: #c25400; --herd: #8d6e00;
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #161a17; --panel: #1e2320; --ink: #e5e8e3; --muted: #9aa39b; --line: #333a35;
-    --accent: #7cc48a; --accent-ink: #10150f; --warn: #e3a54b; --err: #ff8a80; --info: #9fb3c8;
-    --tag: #b9a8f0; --chip: #27302a; --code: #252b27;
-    --paddock: #81c784; --animal: #ffab5e; --herd: #ffd54f;
-  }
+  color-scheme: light;   /* always light, whatever the OS prefers */
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); }
@@ -122,7 +115,7 @@ img.embed { max-width: 100%; max-height: 320px; border-radius: 6px; display: blo
 .tl-filter .chip { display: inline-flex; align-items: center; gap: .25rem; margin: 0; font-weight: normal;
   font-size: .82rem; background: var(--chip); border-radius: 12px; padding: .05rem .5rem; cursor: pointer; }
 .tl-filter .count { margin-left: auto; }
-/* Leaflet popups stay white in dark mode, so keep the light-theme link colours there */
+/* Link colours inside Leaflet popups */
 .leaflet-popup-content a.link.paddocks { color: #2e7d32; }
 .leaflet-popup-content a.link.herds { color: #8d6e00; }
 /* Tagged animals are ear tags: the number on a tag-coloured, left-pointed shape with a
