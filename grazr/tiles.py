@@ -37,18 +37,22 @@ def _path(root: Path, z: int, x: int, y: int) -> Path:
     return state_dir(root) / "tiles" / str(z) / str(x) / f"{y}.jpg"
 
 
-def fetch(root: Path, source: str, z: int, x: int, y: int, timeout: float = 15) -> bytes | None:
+def fetch(root: Path, source: str, z: int, x: int, y: int, timeout: float = 20,
+          retries: int = 1) -> bytes | None:
     p = _path(root, z, x, y)
     if p.exists():
         return p.read_bytes()
     req = urllib.request.Request(_url(source, z, x, y), headers=UA)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            if r.status != 200 or not r.headers.get("Content-Type", "").startswith("image/"):
+    for attempt in range(retries + 1):     # NAIP sometimes times out once
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                if r.status != 200 or not r.headers.get("Content-Type", "").startswith("image/"):
+                    return None
+                data = r.read()
+                break
+        except OSError:
+            if attempt == retries:
                 return None
-            data = r.read()
-    except OSError:
-        return None
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(data)
     return data
@@ -63,7 +67,7 @@ def serve(root: Path, config, rest: str):
     t = config["tiles"] or {}
     if not (int(t.get("min_zoom", 0)) <= z <= int(t.get("max_zoom", 19))):
         return None
-    data = fetch(root, t.get("source", "usgs-imagery"), z, x, y, timeout=8)
+    data = fetch(root, t.get("source", "usgs-imagery"), z, x, y, timeout=8, retries=0)
     if data is None:
         return None
     ctype = "image/png" if data[:4] == b"\x89PNG" else "image/jpeg"
@@ -86,6 +90,35 @@ def plan(bounds: tuple[float, float, float, float], zmin: int, zmax: int):
         for x in range(x0, x1 + 1):
             for y in range(y0, y1 + 1):
                 yield z, x, y
+
+
+def download(root: Path, config, polygons, zoom: tuple[int, int] | None = None,
+             margin_m: float = 300, workers: int = 8, progress=None, limit: int | None = None):
+    """Fetch every missing tile around the paddocks. → (fetched, failed, missing before).
+
+    `progress(done, total, failed)` is called as tiles finish. Stops early if
+    the first 20 tiles all fail (offline).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    t = config["tiles"] or {}
+    zmin, zmax = zoom or (int(t.get("min_zoom", 13)), int(t.get("max_zoom", 19)))
+    bounds = bounds_for(polygons, config["map"]["center"], margin_m)
+    todo = [zxy for zxy in plan(bounds, zmin, zmax) if not _path(root, *zxy).exists()]
+    if limit is not None and len(todo) > limit:
+        return 0, 0, len(todo)
+    source = t.get("source", "usgs-imagery")
+    done = failed = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for ok in pool.map(lambda zxy: fetch(root, source, *zxy) is not None, todo):
+            done += 1
+            failed += not ok
+            if progress:
+                progress(done, len(todo), failed)
+            if done == 20 and failed == 20:
+                pool.shutdown(wait=False, cancel_futures=True)
+                break
+    return done - failed, failed, len(todo)
 
 
 def bounds_for(polygons: list[list[tuple[float, float]]], center, margin_m: float = 300):

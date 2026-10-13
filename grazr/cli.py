@@ -17,14 +17,8 @@ def _farm(args):
 
 def cmd_index(args):
     farm = _farm(args)
-    s = farm.summary()
-    print(f"{s['files']} files: {s['animals']} animals, {s['herds']} herds, "
-          f"{s['paddocks']} paddocks, {s['entries']} entries, {s['moves']} moves")
-    counts = {}
-    for w in farm.warnings():
-        counts[w["code"]] = counts.get(w["code"], 0) + 1
-    if counts:
-        print(f"{s['warnings']} warnings: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    print(farm.summary_text())
+    if farm.warnings():
         print("run `grazr lint` for details")
     return 0
 
@@ -77,39 +71,29 @@ def cmd_geojson(args):
 
 def cmd_server(args):
     from .server import run
-    run(data_root(args.root), host=args.host, port=args.port)
+    run(data_root(args.root), host=args.host, port=args.port, fetch_tiles=not args.no_tiles)
     return 0
 
 
 def cmd_tiles(args):
-    from concurrent.futures import ThreadPoolExecutor
-
     from . import tiles
     farm = _farm(args)
-    cfg = farm.config
-    t = cfg["tiles"] or {}
-    zmin, zmax = int(t.get("min_zoom", 13)), int(t.get("max_zoom", 19))
+    zoom = None
     if args.zoom:
         lo, _, hi = args.zoom.partition("-")
-        zmin, zmax = int(lo), int(hi or lo)
-    polys = [c.parsed.perimeter for c in farm.index.cache.values()
-             if c.kind == "entity" and c.etype == "paddocks" and c.parsed.perimeter]
-    bounds = tiles.bounds_for(polys, cfg["map"]["center"], args.margin)
-    todo = list(tiles.plan(bounds, zmin, zmax))
-    print(f"{len(todo)} tiles, zoom {zmin}-{zmax}, "
-          f"bounds {bounds[0]:.5f},{bounds[1]:.5f} to {bounds[2]:.5f},{bounds[3]:.5f}")
-    if len(todo) > 20000 and not args.yes:
-        print("that's a lot of tiles; narrow --zoom or pass --yes")
+        zoom = (int(lo), int(hi or lo))
+
+    def progress(done, total, failed):
+        if done % 50 == 0 or done == total:
+            print(f"\r{done}/{total} ({failed} failed)", end="", flush=True)
+
+    got, failed, missing = tiles.download(
+        farm.root, farm.config, farm.paddock_polygons(), zoom, args.margin,
+        progress=progress, limit=None if args.yes else 20000)
+    if missing and not got and not failed:
+        print(f"{missing} tiles missing; that's a lot, so narrow --zoom or pass --yes")
         return 1
-    source = t.get("source", "usgs-imagery")
-    done = failed = 0
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        for ok in pool.map(lambda zxy: tiles.fetch(farm.root, source, *zxy) is not None, todo):
-            done += 1
-            failed += not ok
-            if done % 100 == 0 or done == len(todo):
-                print(f"\r{done}/{len(todo)} ({failed} failed)", end="", flush=True)
-    print()
+    print(f"\n{got} downloaded, {failed} failed" if missing else "all tiles already cached")
     return 0 if not failed else 1
 
 
@@ -133,9 +117,10 @@ def main(argv=None):
     p.add_argument("paths", nargs="*")
     p.add_argument("--apply", action="store_true")
     p.set_defaults(fn=cmd_migrate)
-    p = sub.add_parser("server", help="run the web UI")
+    p = sub.add_parser("server", help="index, then run the web UI (fetches missing imagery)")
     p.add_argument("--port", type=int, default=8714)
     p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--no-tiles", action="store_true", help="don't download missing map imagery")
     p.set_defaults(fn=cmd_server)
     p = sub.add_parser("tiles", help="download map imagery for offline use")
     p.add_argument("--zoom", help="e.g. 13-19 (default from grazr.yaml)")

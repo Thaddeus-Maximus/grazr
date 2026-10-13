@@ -9,18 +9,17 @@ SQLite index is derived and disposable; the files are the truth.
 ```
 pip install -e .
 cd D:/farm/docs/grazr          # the data root
-grazr tiles                    # once, while online: imagery for offline maps
 grazr server                   # http://127.0.0.1:8714
 ```
 
 | Command | Does |
 |---|---|
-| `grazr server [--port]` | Web UI: map, animals, herds, paddocks, notes, moves, lint |
+| `grazr server [--port] [--no-tiles]` | Index, print the lint summary, fetch missing imagery in the background, and run the web UI |
 | `grazr index` | Rebuild the index and summarize warnings |
 | `grazr lint [--all]` | Print warnings as `file:line code message` |
 | `grazr fix [--apply]` | Rewrite shorthand links (`[[o 010]]` → `[[orange-010]]`) |
 | `grazr migrate [paths] [--apply]` | One-time: link bare IDs like `e010` in old notes |
-| `grazr tiles [--zoom 13-19]` | Download imagery around the paddocks |
+| `grazr tiles [--zoom 13-19]` | Download missing imagery around the paddocks (the server does this too) |
 | `grazr geojson [-o file]` | Export paddocks for GIS |
 
 `fix` and `migrate` print a diff until you pass `--apply`. grazr never commits.

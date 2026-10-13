@@ -635,21 +635,77 @@ def make_handler(app: App, port: int):
     return Handler
 
 
-def watch(farm: Farm, stop: threading.Event, interval: float = 2.0):
+class TileKeeper:
+    """Downloads missing imagery in the background: at startup and whenever
+    the paddocks change. Only tiles not already cached are fetched."""
+
+    def __init__(self, farm: Farm, limit: int = 20000):
+        self.farm = farm
+        self.limit = limit
+        self.key = None
+        self.busy = threading.Lock()
+
+    def check(self):
+        with self.farm.index.lock:
+            polys = self.farm.paddock_polygons()
+            cfg = self.farm.config
+        key = (json.dumps(polys), json.dumps(cfg["tiles"]), json.dumps(cfg["map"]))
+        if key == self.key or not self.busy.acquire(blocking=False):
+            return
+        self.key = key
+        threading.Thread(target=self._run, args=(polys, cfg), daemon=True).start()
+
+    def _run(self, polys, cfg):
+        try:
+            last = [0.0]
+
+            def progress(done, total, failed):
+                if time.time() - last[0] > 30 or done == total:
+                    last[0] = time.time()
+                    print(f"tiles: {done}/{total}" + (f" ({failed} failed)" if failed else ""), flush=True)
+
+            got, failed, missing = tiles.download(self.farm.root, cfg, polys, progress=progress,
+                                                  limit=self.limit)
+            if missing and not got and not failed:
+                print(f"tiles: {missing} missing is too many to fetch automatically; "
+                      f"run `grazr tiles --zoom …` to choose", flush=True)
+            elif missing and failed and not got:
+                print("tiles: offline? none could be downloaded; the map will fill in when online",
+                      flush=True)
+                self.key = None  # try again on the next change
+            elif missing:
+                print(f"tiles: {got} downloaded" + (f", {failed} failed" if failed else ""), flush=True)
+        except Exception:
+            traceback.print_exc()
+        finally:
+            self.busy.release()
+
+
+def watch(farm: Farm, keeper: TileKeeper, stop: threading.Event, interval: float = 2.0):
     while not stop.wait(interval):
         try:
-            farm.refresh()
+            if farm.refresh():
+                keeper.check()
         except Exception:
             traceback.print_exc()
 
 
-def run(root: Path, host: str = "127.0.0.1", port: int = 8714):
+def run(root: Path, host: str = "127.0.0.1", port: int = 8714, fetch_tiles: bool = True):
+    print(f"indexing {root} …", flush=True)
     farm = Farm(root)
+    print(farm.summary_text())
+    if farm.warnings():
+        print("see the Lint page, or run `grazr lint`")
     app = App(farm)
     stop = threading.Event()
-    threading.Thread(target=watch, args=(farm, stop), daemon=True).start()
+    keeper = TileKeeper(farm)
+    if fetch_tiles:
+        keeper.check()
+    else:
+        keeper.busy.acquire()   # never fetch
+    threading.Thread(target=watch, args=(farm, keeper, stop), daemon=True).start()
     httpd = ThreadingHTTPServer((host, port), make_handler(app, port))
-    print(f"grazr serving {root} at http://{host}:{port}  (Ctrl+C to stop)")
+    print(f"grazr serving {root} at http://{host}:{port}  (Ctrl+C to stop)", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

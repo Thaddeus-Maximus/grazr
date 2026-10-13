@@ -519,11 +519,11 @@ preserved.
 
 | Command | Does |
 |---|---|
-| `grazr server [--port]` | Runs the web UI (§8). |
+| `grazr server [--port] [--no-tiles]` | Indexes, prints the lint summary, downloads any missing tiles in the background (again whenever paddocks change), and runs the web UI (§8). |
 | `grazr index` | Rebuilds the index and prints a summary of warnings. |
 | `grazr lint` | Prints warnings as `file:line code message`. |
 | `grazr fix [--apply]` | Rewrites shorthand links (`[[o 010]]`) to canonical IDs. Dry-run by default: prints a diff. |
-| `grazr tiles [--zoom 13-19]` | Downloads imagery covering the paddocks plus a margin, or the map view if there are no paddocks yet. |
+| `grazr tiles [--zoom 13-19]` | Downloads missing imagery covering the paddocks plus a margin, or the map view if there are no paddocks yet. |
 | `grazr geojson [-o file]` | Exports all paddocks as one GeoJSON FeatureCollection. |
 | `grazr migrate [paths] [--apply]` | One-time rewrite of old ID spellings to wikilinks (§11). Dry-run by default: prints a diff. |
 

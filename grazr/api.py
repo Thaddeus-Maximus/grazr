@@ -350,6 +350,23 @@ class Farm:
                 if c.kind == "entity" and c.etype == "paddocks"]
         return geo.geojson(sorted(ents, key=lambda e: e.id.casefold()))
 
+    def paddock_polygons(self) -> list:
+        return [c.parsed.perimeter for c in self.index.cache.values()
+                if c.kind == "entity" and c.etype == "paddocks" and c.parsed.perimeter]
+
+    def summary_text(self) -> str:
+        """What `grazr index` prints; the server prints it at startup too."""
+        s = self.summary()
+        lines = [f"{s['files']} files: {s['animals']} animals, {s['herds']} herds, "
+                 f"{s['paddocks']} paddocks, {s['entries']} entries, {s['moves']} moves"]
+        counts: dict[str, int] = {}
+        for w in self.warnings():
+            counts[w["code"]] = counts.get(w["code"], 0) + 1
+        if counts:
+            lines.append(f"{s['warnings']} warnings: " +
+                         ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        return "\n".join(lines)
+
     def summary(self) -> dict:
         q = lambda s: self.db.execute(s).fetchone()[0]  # noqa: E731
         return {
