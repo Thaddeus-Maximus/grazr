@@ -23,7 +23,7 @@ _INLINE = re.compile(
 
 
 class Renderer:
-    """`href(target) → (url, css_class)` resolves a wikilink target."""
+    """`href(target) → (url, css_class, (tag number, id) | None)` resolves a wikilink target."""
 
     def __init__(self, href, image_url):
         self.href = href
@@ -66,10 +66,15 @@ class Renderer:
         return Markup("".join(out))
 
     def _link(self, target: str, label: str) -> str:
-        url, cls = self.href(target)
+        url, cls, tag = self.href(target)
         if url is None:
             return f'<span class="link {cls}" title="unresolved">{escape(label)}</span>'
-        return f'<a class="link {cls}" href="{escape(url)}">{escape(label)}</a>'
+        title = ""
+        if tag:   # (number, id): a tagged animal shows just its number unless aliased
+            title = f' title="{escape(tag[1])}"'
+            if label == target:
+                label = tag[0]
+        return f'<a class="link {cls}" href="{escape(url)}"{title}>{escape(label)}</a>'
 
     def document(self, text: str) -> Markup:
         out = []

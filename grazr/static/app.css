@@ -125,11 +125,19 @@ img.embed { max-width: 100%; max-height: 320px; border-radius: 6px; display: blo
 /* Leaflet popups stay white in dark mode, so keep the light-theme link colours there */
 .leaflet-popup-content a.link.paddocks { color: #2e7d32; }
 .leaflet-popup-content a.link.herds { color: #8d6e00; }
-/* Tagged animals are solid badges in their tag colour (colours per series, set in base.html) */
+/* Tagged animals are ear tags: the number on a tag-coloured, left-pointed shape with a
+   punch hole (colours per series, set in base.html). The shape is drawn by ::before so
+   the drop-shadow outline can follow the point. */
 a.link.animals.eartag {
-  display: inline-block; border-radius: 3px; padding: 0 6px; font-size: .78rem; line-height: 1.5;
-  background: var(--tag-bg); color: var(--tag-fg); border: 1px solid rgba(0,0,0,.18);
-  font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; text-decoration: none;
-  vertical-align: baseline;
+  position: relative; isolation: isolate; display: inline-block;
+  padding: 0 5px 0 14px; font-size: .78rem; line-height: 1.5;
+  color: var(--tag-fg); font-weight: 600; white-space: nowrap;
+  font-variant-numeric: tabular-nums; text-decoration: none; vertical-align: baseline;
+  filter: drop-shadow(0 0 .6px rgba(0,0,0,.55));
 }
-a.link.animals.eartag:hover { filter: brightness(1.08); text-decoration: none; }
+a.link.animals.eartag::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 0 3px 3px 0;
+  background: radial-gradient(circle at 7px 50%, rgba(0,0,0,.35) 1.6px, transparent 2.2px), var(--tag-bg);
+  clip-path: polygon(0 50%, 8px 0, 100% 0, 100% 100%, 8px 100%);
+}
+a.link.animals.eartag:hover { filter: drop-shadow(0 0 .6px rgba(0,0,0,.55)) brightness(1.08); text-decoration: none; }

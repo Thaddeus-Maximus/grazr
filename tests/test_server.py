@@ -1,5 +1,6 @@
 """Every page renders, and every write action writes what a person would type."""
 import json
+import re
 import threading
 import urllib.error
 import urllib.parse
@@ -175,5 +176,7 @@ def test_backdated_move_and_bad_when(web, farm_root):
 def test_eartag_links(web):
     _, _, body = web("/h/Ewe%20Herd")
     assert 'class="link animals eartag s-orange"' in body
+    tags = re.findall(r'eartag s-(\w+)" href="[^"]*" title="([^"]+)">([^<]*)<', body)
+    assert tags and all(t == f"{s}-{n}" and n.isdigit() for s, t, n in tags)
     assert ".eartag.s-orange{--tag-bg:#f7931e;--tag-fg:#111}" in body
     assert ".eartag.s-blue{--tag-bg:#1f64c8;--tag-fg:#fff}" in body

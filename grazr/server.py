@@ -50,7 +50,7 @@ class App:
                                autoescape=select_autoescape(["html"]), trim_blocks=True,
                                lstrip_blocks=True)
         self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, static=self.static_url)
-        self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype,
+        self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype, elabel=self.elabel,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
                                 q=lambda s: quote(str(s)))
@@ -62,18 +62,28 @@ class App:
             return entity_url(r.id, r.etype)
         return f"/search?q={quote(eid)}"
 
+    def tag(self, r) -> tuple[str, str] | None:
+        """(series, number) when a resolved link is a tagged animal."""
+        if r.kind == "entity" and r.etype == "animals":
+            series, _, num = r.id.rpartition("-")
+            if num.isdigit() and series in {s.name for s in self.farm.config.series}:
+                return series, num
+        return None
+
     def link_class(self, r) -> str:
         """CSS classes for a resolved link: its type, plus an ear-tag chip for tagged animals."""
         if r.kind != "entity":
             return r.kind
-        if r.etype == "animals":
-            series, _, num = r.id.rpartition("-")
-            if num.isdigit() and series in {s.name for s in self.farm.config.series}:
-                return f"animals eartag s-{series}"
-        return r.etype
+        t = self.tag(r)
+        return f"animals eartag s-{t[0]}" if t else r.etype
 
     def etype(self, eid: str) -> str:
         return self.link_class(self.farm.resolver().resolve(eid))
+
+    def elabel(self, eid: str) -> str:
+        """Link text: just the number for a tagged animal (the colour says the series)."""
+        t = self.tag(self.farm.resolver().resolve(eid))
+        return t[1] if t else eid
 
     # Ear-tag shades for common tag colours; anything else is used as given.
     TAG_COLORS = {"white": "#f7f7f2", "orange": "#f7931e", "blue": "#1f64c8", "green": "#2e9d47",
@@ -97,10 +107,11 @@ class App:
     def href(self, target: str):
         r = self.farm.resolver().resolve(target)
         if r.kind == "entity":
-            return entity_url(r.id, r.etype), self.link_class(r)
+            t = self.tag(r)
+            return entity_url(r.id, r.etype), self.link_class(r), (t[1], r.id) if t else None
         if r.kind == "note":
-            return f"/n/{quote(r.id)}", "note"
-        return None, "unresolved"
+            return f"/n/{quote(r.id)}", "note", None
+        return None, "unresolved", None
 
     def image_url(self, name: str) -> str:
         return f"/img?name={quote(name)}"
