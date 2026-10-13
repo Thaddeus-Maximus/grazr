@@ -110,7 +110,7 @@ class _State:
             if old[0] == herd:
                 self.cur[animal] = old
                 herd = None  # unchanged; still propagate to followers below
-            else:
+            elif old[1] != t:   # a same-instant hop (followed dam, then moved) isn't history
                 self.out.memberships.append(
                     Membership(animal, old[0], old[1], t, old[2], old[3], old[4]))
         if herd is not None:
