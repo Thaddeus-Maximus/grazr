@@ -125,3 +125,10 @@ img.embed { max-width: 100%; max-height: 320px; border-radius: 6px; display: blo
 /* Leaflet popups stay white in dark mode, so keep the light-theme link colours there */
 .leaflet-popup-content a.link.paddocks { color: #2e7d32; }
 .leaflet-popup-content a.link.herds { color: #8d6e00; }
+/* Tagged animals look like their ear tag (colours per series, set in base.html) */
+a.link.animals.eartag {
+  background: var(--tag-bg); color: var(--tag-fg); border: 1px solid rgba(0,0,0,.28);
+  border-radius: 3px 3px 7px 7px; padding: 0 .35em; font-weight: 600; white-space: nowrap;
+  font-variant-numeric: tabular-nums; text-decoration: none;
+}
+a.link.animals.eartag:hover { filter: brightness(1.08); text-decoration: none; }

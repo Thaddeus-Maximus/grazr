@@ -62,14 +62,42 @@ class App:
             return entity_url(r.id, r.etype)
         return f"/search?q={quote(eid)}"
 
+    def link_class(self, r) -> str:
+        """CSS classes for a resolved link: its type, plus an ear-tag chip for tagged animals."""
+        if r.kind != "entity":
+            return r.kind
+        if r.etype == "animals":
+            series, _, num = r.id.rpartition("-")
+            if num.isdigit() and series in {s.name for s in self.farm.config.series}:
+                return f"animals eartag s-{series}"
+        return r.etype
+
     def etype(self, eid: str) -> str:
-        r = self.farm.resolver().resolve(eid)
-        return r.etype if r.kind == "entity" else r.kind
+        return self.link_class(self.farm.resolver().resolve(eid))
+
+    # Ear-tag shades for common tag colours; anything else is used as given.
+    TAG_COLORS = {"white": "#f7f7f2", "orange": "#f7931e", "blue": "#1f64c8", "green": "#2e9d47",
+                  "yellow": "#fbd400", "red": "#d32f2f", "pink": "#ef7fb0", "purple": "#7b4fb8",
+                  "black": "#222222", "gray": "#9e9e9e", "grey": "#9e9e9e", "brown": "#8d5a32"}
+
+    def tag_styles(self) -> str:
+        """`.s-<series>` rules giving each series' chip its tag colour and readable text."""
+        out = []
+        for s in self.farm.config.series:
+            bg = self.TAG_COLORS.get(s.color.lower(), s.color)
+            fg = "#111"
+            h = bg.lstrip("#")
+            if len(h) == 6 and all(c in "0123456789abcdefABCDEF" for c in h):
+                r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+                fg = "#111" if 0.299 * r + 0.587 * g + 0.114 * b > 140 else "#fff"
+            name = re.sub(r"[^\w-]", "", s.name)
+            out.append(f".eartag.s-{name}{{--tag-bg:{bg};--tag-fg:{fg}}}")
+        return "\n".join(out)
 
     def href(self, target: str):
         r = self.farm.resolver().resolve(target)
         if r.kind == "entity":
-            return entity_url(r.id, r.etype), r.etype
+            return entity_url(r.id, r.etype), self.link_class(r)
         if r.kind == "note":
             return f"/n/{quote(r.id)}", "note"
         return None, "unresolved"

@@ -33,6 +33,7 @@ class Series:
     words: list[str]
     emoji: list[str]
     defaults: dict
+    color: str = ""          # tag colour for links; defaults to the series name
 
 
 @dataclass
@@ -79,6 +80,7 @@ def from_dict(data: dict) -> Config:
             words=words,
             emoji=[str(e) for e in (s.get("emoji") or [])],
             defaults=dict(s.get("defaults") or {}),
+            color=str(s.get("color") or name),
         ))
     types = dict(BUILTIN_TYPES)
     for name, t in (raw.get("types") or {}).items():

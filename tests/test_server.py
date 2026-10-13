@@ -170,3 +170,10 @@ def test_backdated_move_and_bad_when(web, farm_root):
     assert (farm_root / "notes" / "2026May01-0730.md").read_text(encoding="utf-8") == "[[Hogs]] -> [[P3]]\n"
     assert web("/new", {"text": "x", "when": "the day after the storm"})[0] == 400
     assert web("/new", {"text": "x", "when": "2099-01-01"})[0] == 400
+
+
+def test_eartag_links(web):
+    _, _, body = web("/h/Ewe%20Herd")
+    assert 'class="link animals eartag s-orange"' in body
+    assert ".eartag.s-orange{--tag-bg:#f7931e;--tag-fg:#111}" in body
+    assert ".eartag.s-blue{--tag-bg:#1f64c8;--tag-fg:#fff}" in body

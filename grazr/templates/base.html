@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}grazr{% endblock %} · grazr</title>
 <link rel="stylesheet" href="{{ static('app.css') }}">
+<style>{{ app.tag_styles()|safe }}</style>
 {% block head %}{% endblock %}
 </head>
 <body>

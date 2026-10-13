@@ -95,6 +95,11 @@ series:                              # tag series = tag colour, NOT sex
 
 New species and new tag schemes are added by adding a series here (Q98).
 
+Links to tagged animals are drawn as ear tags in the series' colour. A series
+can set `color:` (a name like `orange` or a hex value like `#f7931e`);
+otherwise its name is used. Common tag colours (white, orange, blue, green,
+yellow, red, ...) map to ear-tag shades, and the text is dark or light to suit.
+
 ## 4. Entities
 
 An entity's **ID is its filename stem**. IDs are unique across all three
