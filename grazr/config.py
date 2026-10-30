@@ -8,12 +8,15 @@ from ruamel.yaml import YAML
 
 CONFIG_NAME = "grazr.yaml"
 
-BUILTIN_TYPES = {"animals": "animals", "herds": "herds", "paddocks": "paddocks"}
+BUILTIN_TYPES = {"animals": "animals", "herds": "herds", "paddocks": "paddocks", "feeds": "feeds"}
 
 DEFAULTS = {
     "units": {"area": "acres", "length": "feet", "weight": "lb", "temperature": "F"},
     "timezone": "America/Chicago",
     "note_filename": "%Y%b%d-%H%M",
+    # where new notes go; "" puts them at the top of the data folder. Notes are read
+    # from anywhere outside the item folders, whatever this says.
+    "notes_dir": "notes",
     "id_digits": 3,
     "rest_full_days": 60,          # map: green at this many days rested
     "occupied_full_days": 10,      # map: red at this many days occupied

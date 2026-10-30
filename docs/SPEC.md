@@ -70,6 +70,7 @@ this farm:
 units: {area: acres, length: feet, weight: lb, temperature: F}
 timezone: America/Chicago
 note_filename: "%Y%b%d-%H%M"        # 2026Oct12-0707 — what grazr writes
+notes_dir: notes                     # where grazr writes new notes; "" = the top level
 id_digits: 3                         # orange-010
 rest_full_days: 60                   # map colour reaches full green here
 map:
@@ -108,8 +109,13 @@ and both files are indexed under their paths until it is fixed.
 
 Frontmatter is YAML, edited by Obsidian's Properties panel or by the web UI.
 Links in frontmatter are quoted wikilinks (`dam: "[[orange-117]]"`). Every
-field is optional. The body of an entity file is undated prose: a description,
-shown at the top of its page.
+field is optional. The body of an entity file is shown at the top of its page.
+Undated lines are its description. Dated lines (`@31MAR2024 administered 2cc
+CD/T`, or lines under a `Date:` line or a date heading) are entries about the
+entity, exactly as if a note had said `[[the entity]] administered ...`: they
+appear on its timeline, in the feed and via herd or parent pages. Moves, head
+counts and exits are read from the line as written, so `weaned [[x]] -> [[Lambs]]`
+in a dam's file moves only the lamb.
 
 ### 4.0 Structural fields (the whole list)
 
@@ -122,6 +128,7 @@ derived depends on it.
 | animal | `born` | lamb membership start, birth type |
 | animal | `left` | ends membership; hides the animal by default. A date, or `unknown` when it's gone but the date isn't recorded. Usually derived from an exit statement (§5.3.1) instead |
 | animal | `birth_type` | override for a derived value |
+| animal | `pedigree_only` | `true` for an animal never on this farm, known only as a dam or sire in its offspring's pedigree. It keeps its links and pedigree but is left out of the animal list (shown, marked, when leavers are shown) |
 | herd | `anonymous` | a herd with no individual animals, only a head count (§5.3) |
 | paddock | `perimeter` | geometry, area, rest days |
 | paddock | `parent` | containment; parents draw as outlines (§6.3) |
@@ -255,6 +262,10 @@ Prose about the paddock.
   `grazr geojson` exports every paddock as one FeatureCollection for GIS tools.
 
 ## 5. Notes
+
+A note is any `.md` file outside the item folders: at the top of the data folder,
+in `notes/`, or in any other folder. `notes_dir` only says where grazr writes new
+ones.
 
 ### 5.1 Entries
 
@@ -461,6 +472,44 @@ An entry appears on the timeline of:
   (Q49, Q50), shown as "via Ewe Herd";
 - a paddock's parent field, rolled up from the paddock and marked as such.
 
+### 6.6 Feed
+
+A feed is a file in `feeds/` (`feeds/Corn screenings.md`). Feed is kept in
+**pounds**; `sizes` says what the feed's other measures weigh, so notes can use
+them (`sizes: {bucket: 20, bale: 50}`). `aliases` (Obsidian's own field) lists
+other words for it: `[[screenings]]` links to it, and old notes that write
+`1 bucket of screenings` get a link suggested. (Any item's `aliases` work as link
+targets; an exact ID wins over an alias.)
+
+An amount next to a feed link, before it (`1 bucket of soaked [[Corn
+screenings]]`) or after it (`[[Corn screenings]]: 2 buckets`), is a feed event:
+- `[[Corn screenings]] = 20 buckets` is a **stock count**: that much on hand then;
+- with `bought`, `purchased`, `picked up`, `delivered` or `got in` it's a
+  **purchase**;
+- with `per day`, `a day`, `each day`, `every day`, `daily` or `/day` (in the
+  entry or a list item above it) it's a **standing rate**: one feeding a day, at
+  the time written, from then on, e.g. `Started feeding 1 bucket of [[Corn
+  screenings]] per day to [[Ewes]]`. It runs until another rate for the same
+  herds, or a line that links the feed with no amount and says `stopped`,
+  `quit`, `no more`, `discontinued` or `ended` (`Stopped feeding [[Corn
+  screenings]] to [[Ewes]]`; with no herd it stops all of that feed's rates);
+- otherwise it's **use**, by the herds the entry links (shared evenly between
+  them), e.g. `Fed 1 bucket [[Corn screenings]] to [[Ewes]]`.
+
+Amounts can be numbers, fractions (`1/2`), or `a`, `half`, `one` ... `ten`.
+Measures are `lb`, `kg`, `ton`, `oz` or one of the feed's sizes; plurals are
+fine. An amount with no measure is in pounds (or `each`, if the feed's sizes have
+it). A measure with no number, `bale of [[Hay]]`, is 1 of it, but only for common
+measures (bale, bucket, bag, sack, scoop, pail, flake, ...) or the feed's sizes, so
+`rest of [[Hay]]` isn't an amount. An unknown measure is a `feed-unit` warning and the event is not counted.
+
+On hand is worked forward through the dated events: a count sets it, a purchase
+adds to it, use subtracts from it (before the first count or purchase it's
+unknown). **Per day** is the standing rates still running, or with none, the
+average use over the last 14 days (or since use began, if that's sooner); **days
+left** is on hand divided by that. The feed's page shows a rate's run of daily
+feedings as one ledger row.
+
 ## 7. Index
 
 The index is SQLite at `<root>/.grazr/index.sqlite`, rebuilt in full by
@@ -515,7 +564,7 @@ renamed into place, so a file is never half-written.
 
 | Action | What it writes |
 |---|---|
-| New note | `notes/<when>.md` in the `note_filename` format, containing the tag line and the text. `when` defaults to now and can be backdated ("15 Dec 2025", "yesterday 6pm"); a date with no time adds a `Date:` line so the entries are approximate. Future times are refused. The editor autocompletes `[[` from entity IDs and `#` from existing tags. |
+| New note | `<notes_dir>/<when>.md` (default `notes/`) in the `note_filename` format, containing the tag line and the text. `when` defaults to now and can be backdated ("15 Dec 2025", "yesterday 6pm"); a date with no time adds a `Date:` line so the entries are approximate. Future times are refused. The editor autocompletes `[[` from entity IDs and `#` from existing tags. |
 | Move herd | A move line (`->` or `+>`) in a new note, named by the move's time (backdating works as for a new note). The form picks a herd, picks paddocks on the map or from a list, and takes an optional time and comment. |
 | Move animals | A multi-select on a herd page or in the animal list, plus a destination herd. It writes one membership line. |
 | New animal / herd | A new entity file from series defaults. |
@@ -584,6 +633,8 @@ The server and the CLI both call one shared `api` module, as in slimpdm.
 | `left-unknown` | `left: unknown`: gone, but the date isn't recorded (informational). |
 | `bad-perimeter` | The polygon has fewer than 3 points, crosses itself, or has bad coordinates. |
 | `missing-image` | An embedded image wasn't found. |
+| `feed-unit` | A feed amount uses a measure the feed's `sizes` doesn't define (§6.6). |
+| `unlinked-feed` | Text like `1 bucket of screenings` names a feed (or one of its `aliases`) without linking it; fixable, keeping the words as the link's alias. |
 | `bad-frontmatter` | The YAML doesn't parse, or a **structural** field has the wrong type (e.g. `born` isn't a date). Free fields are never checked. |
 
 ## 11. One-time migration
@@ -632,7 +683,7 @@ These were each answered "no" or "not yet":
 - reports
 - printouts
 - CSV, PDF or ODS export (GeoJSON export is in)
-- feed and finance tracking
+- finance tracking (feed inventory and use are in, §6.6; costs are not)
 - tasks and follow-ups
 - condition tracking with open/closed state
 - grazing plans

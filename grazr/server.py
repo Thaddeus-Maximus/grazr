@@ -7,7 +7,7 @@ import re
 import threading
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -15,15 +15,16 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
-from . import frontmatter, tiles, writes
-from .api import Farm, fields, fix_json, gone, parse_ts
+from . import feed as feed_mod
+from . import frontmatter, geo, tiles, writes
+from .api import Farm, fields, fix_json, gone, parse_ts, pedigree_only
 from .dates import Stamp, parse_when
 from .index import TS
 from .render import Renderer
 from .writes import WriteError
 
 STATIC = Path(__file__).parent / "static"
-TYPE_PREFIX = {"animals": "a", "herds": "h", "paddocks": "p"}
+TYPE_PREFIX = {"animals": "a", "herds": "h", "paddocks": "p", "feeds": "f"}
 PREFIX_TYPE = {v: k for k, v in TYPE_PREFIX.items()}
 MAX_UPLOAD = 40 * 1024 * 1024
 
@@ -49,10 +50,12 @@ class App:
         self.env = Environment(loader=PackageLoader("grazr", "templates"),
                                autoescape=select_autoescape(["html"]), trim_blocks=True,
                                lstrip_blocks=True)
-        self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, static=self.static_url)
+        self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, pedigree_only=pedigree_only,
+                                static=self.static_url)
         self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype, elabel=self.elabel,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
+                                fence=self.fence, lb=self.fmt_lb,
                                 q=lambda s: quote(str(s)))
 
     # --- helpers used by templates -------------------------------------------
@@ -62,20 +65,52 @@ class App:
             return entity_url(r.id, r.etype)
         return f"/search?q={quote(eid)}"
 
-    def tag(self, r) -> tuple[str, str] | None:
-        """(series, number) when a resolved link is a tagged animal."""
+    def tag(self, r) -> tuple[str | None, str] | None:
+        """(series, text on the tag) when a resolved link is an animal. A tagged animal
+        (`<series>-<number>`, the series configured or just a tag colour like `white`)
+        shows its number; an untagged one (e.g. Ram) its name, on a plain white tag."""
         if r.kind == "entity" and r.etype == "animals":
             series, _, num = r.id.rpartition("-")
-            if num.isdigit() and series in {s.name for s in self.farm.config.series}:
-                return series, num
+            if num.isdigit() and (series in {s.name for s in self.farm.config.series}
+                                  or series.lower() in self.TAG_COLORS):
+                configured = series in {s.name for s in self.farm.config.series}
+                return (series if configured else series.lower()), num
+            return None, r.id
         return None
 
     def link_class(self, r) -> str:
-        """CSS classes for a resolved link: its type, plus an ear-tag chip for tagged animals."""
+        """CSS classes for a resolved link: its type, plus an ear tag for animals."""
         if r.kind != "entity":
             return r.kind
         t = self.tag(r)
-        return f"animals eartag s-{t[0]}" if t else r.etype
+        if not t:
+            return r.etype
+        return f"animals eartag s-{self.series_class(t[0])}" if t[0] else "animals eartag untagged"
+
+    @staticmethod
+    def fmt_lb(v, sizes: dict | None = None) -> str:
+        """Pounds, e.g. `400 lb`, and with a feed's sizes also its biggest measure that
+        fits: `400 lb (20 buckets)`."""
+        if v is None:
+            return ""
+        out = f"{v:,.0f} lb" if abs(v) >= 10 else f"{v:.1f} lb"
+        fits = [(w, u) for u, w in (sizes or {}).items() if w > 0 and abs(v) >= w]
+        if fits:
+            w, u = max(fits)
+            n = v / w
+            out += f" ({n:.1f}".rstrip("0").rstrip(".") + f" {u}{'' if abs(n) == 1 else 's'})"
+        return out
+
+    @staticmethod
+    def fence(row) -> str:
+        """A paddock row's perimeter length, e.g. `1,234 ft`; "" without a shape."""
+        if not row["polygon"]:
+            return ""
+        return f"{geo.perimeter_feet(json.loads(row['polygon'])):,.0f} ft"
+
+    @staticmethod
+    def series_class(name: str) -> str:
+        return re.sub(r"[^\w-]", "", name)
 
     def etype(self, eid: str) -> str:
         return self.link_class(self.farm.resolver().resolve(eid))
@@ -93,15 +128,16 @@ class App:
     def tag_styles(self) -> str:
         """`.s-<series>` rules giving each series' chip its tag colour and readable text."""
         out = []
-        for s in self.farm.config.series:
-            bg = self.TAG_COLORS.get(s.color.lower(), s.color)
+        colors = {c: c for c in self.TAG_COLORS}   # `white-012` is a white tag even unconfigured
+        colors.update({s.name: s.color for s in self.farm.config.series})
+        for name, color in colors.items():
+            bg = self.TAG_COLORS.get(color.lower(), color)
             fg = "#111"
             h = bg.lstrip("#")
             if len(h) == 6 and all(c in "0123456789abcdefABCDEF" for c in h):
                 r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
                 fg = "#111" if 0.299 * r + 0.587 * g + 0.114 * b > 140 else "#fff"
-            name = re.sub(r"[^\w-]", "", s.name)
-            out.append(f".eartag.s-{name}{{--tag-bg:{bg};--tag-fg:{fg}}}")
+            out.append(f".eartag.s-{self.series_class(name)}{{--tag-bg:{bg};--tag-fg:{fg}}}")
         return "\n".join(out)
 
     def href(self, target: str):
@@ -170,6 +206,11 @@ class App:
     def types(self) -> list[str]:
         return list(self.farm.config.types)
 
+    @staticmethod
+    def type_prefix(etype: str) -> str:
+        """The URL prefix of a type's item pages (`a` for /a/blue-001)."""
+        return TYPE_PREFIX.get(etype) or f"x/{etype}"
+
     def warning_count(self) -> int:
         return self.farm.q1("SELECT count(*) FROM warnings WHERE severity != 'info'")[0]
 
@@ -182,13 +223,17 @@ class App:
         ("GET", r"/a/(?P<eid>[^/]+)", "animal"),
         ("GET", r"/h/(?P<eid>[^/]+)", "herd"),
         ("GET", r"/p/(?P<eid>[^/]+)", "paddock"),
+        ("GET", r"/f/(?P<eid>[^/]+)", "feed"),
+        ("POST", r"/feed/(?P<eid>[^/]+)", "feed_save"),
         ("GET", r"/x/(?P<etype>[^/]+)/(?P<eid>[^/]+)", "other"),
         ("GET", r"/t/(?P<tag>.+)", "tag"),
         ("GET", r"/search", "search"),
         ("GET", r"/n/(?P<path>.+)", "note"),
         ("POST", r"/n/(?P<path>.+)", "note_save"),
+        ("POST", r"/delete/(?P<path>.+)", "delete"),
         ("GET", r"/lint", "lint"),
         ("POST", r"/lint/fix", "lint_fix"),
+        ("GET", r"/manifest\.webmanifest", "manifest"),
         ("GET", r"/new", "new_note"),
         ("POST", r"/new", "new_note_save"),
         ("GET", r"/move", "move"),
@@ -204,6 +249,7 @@ class App:
         ("GET", r"/img", "img"),
         ("GET", r"/api/map", "api_map"),
         ("GET", r"/api/complete", "api_complete"),
+        ("POST", r"/api/rename", "api_rename"),
         ("GET", r"/(?P<etype>[^/]+)", "listing"),
     ]
 
@@ -242,13 +288,19 @@ class App:
         f = self.farm
         row = self._entity(eid, "animals")
         mem = f.membership(row["id"])
+        # ← / → step through the list you came from (app.js); without one, the live animals
+        today = datetime.now().date().isoformat()
+        rows = f.entities("animals")
+        live = [r for r in rows if not gone(r, today) and not pedigree_only(r)]
+        pager = [{"href": entity_url(r["id"], "animals"), "label": r["id"]}
+                 for r in (live if any(r["id"] == row["id"] for r in live) else rows)]
         return self.page(
-            "animal.html", **self._common(row), membership=mem,
+            "animal.html", **self._common(row), membership=mem, pager=pager,
             paddocks=f.occupying(herd=mem["herd"]) if mem else [],
             pedigree=f.pedigree(row["id"], 4), lambing=f.lambing(row["id"]),
             offspring=f.offspring(row["id"]),
             history=f.q("SELECT * FROM memberships WHERE animal=? ORDER BY start DESC", row["id"]),
-            left=gone(row), exit=f.exit(row["id"]))
+            left=gone(row), exit=f.exit(row["id"]), pedigree_only=pedigree_only(row))
 
     def r_herd(self, eid, **_):
         f = self.farm
@@ -258,6 +310,7 @@ class App:
             "herd.html", **self._common(row), members=f.members(row["id"]),
             head=f.head(row["id"]), paddocks=f.occupying(herd=row["id"]), herds=herds,
             heads=f.q("SELECT * FROM heads WHERE herd=? ORDER BY start DESC", row["id"]),
+            feed=f.herd_feed(row["id"]),
             occupancies=f.q("SELECT * FROM occupancies WHERE herd=? ORDER BY start DESC", row["id"]),
             joins=f.q("""SELECT * FROM memberships WHERE herd=? AND inherited=0
                          ORDER BY start DESC LIMIT 200""", row["id"]))
@@ -274,6 +327,59 @@ class App:
             children=f.q("SELECT * FROM entities WHERE parent=? ORDER BY id COLLATE NOCASE", row["id"]),
             polygon=row["polygon"])
 
+    def r_feed(self, eid, **_):
+        f = self.farm
+        row = self._entity(eid, "feeds")
+        ledger = f.feed_ledger(row["id"])
+        since = (datetime.now() - timedelta(days=30)).strftime(TS)
+        by_herd: dict[str, float] = {}
+        for x in ledger:
+            if x["kind"] == "use" and x["ts"] and x["ts"] >= since:
+                for h in x["herds"] or [""]:
+                    by_herd[h] = by_herd.get(h, 0) + x["lb"] / max(1, len(x["herds"]))
+        sizes = feed_mod.sizes(fields(row))
+        herds = [h["id"] for h in f.entities("herds") if not f.idle(h)]
+        st = f.feed_status(row["id"], ledger=ledger)
+        # the on-hand chart: each change once the amount is known, and the line to empty
+        chart = {"now": datetime.now().strftime(TS), "per_day": st["per_day"], "sizes": sizes,
+                 "points": [[x["ts"], x["on_hand"], x["kind"], x.get("daily", False)]
+                            for x in ledger if x["ts"] and x["on_hand"] is not None]}
+        return self.page("feed.html", **self._common(row), ledger=f.feed_ledger_rows(ledger), sizes=sizes,
+                         st=st, rate_days=f.RATE_DAYS, chart=chart,
+                         by_herd=sorted(by_herd.items(), key=lambda kv: -kv[1]),
+                         units=list(sizes) + ["lb"], herds=herds)
+
+    def r_feed_save(self, eid, form, **_):
+        """The feed page's form → one note line, written like a person would."""
+        row = self._entity(eid, "feeds")
+        kind = form.get("kind")
+        link = writes.link(row["id"])
+        herd = (form.get("herd") or "").strip()
+        to = f" to {writes.link(herd)}" if herd else ""
+        qty = (form.get("qty") or "").strip()
+        if kind != "stop":
+            try:
+                feed_mod.number(qty)
+            except ValueError:
+                raise WriteError(f"{qty!r} isn't an amount")
+        unit = (form.get("unit") or "lb").strip()
+        amount = f"{qty} {unit}" if kind == "stop" or feed_mod.number(qty) == 1 or unit == "lb" else f"{qty} {unit}s"
+        if kind == "stop":
+            text = f"Stopped feeding {link}" + to
+        elif kind == "rate":
+            text = f"Started feeding {amount} {link} per day" + to
+        elif kind == "count":
+            text = f"{link} = {amount}"
+        elif kind == "buy":
+            text = f"bought {amount} {link}"
+        else:
+            text = f"Fed {amount} {link}" + to
+        if (form.get("comment") or "").strip():
+            text += " " + form["comment"].strip()
+        self._note(text, form)
+        self.farm.refresh()
+        raise Redirect(entity_url(row["id"], "feeds"))
+
     def r_other(self, etype, eid, **_):
         row = self._entity(eid, etype)
         return self.page("entity.html", **self._common(row))
@@ -283,14 +389,18 @@ class App:
         if etype not in f.config.types:
             raise NotFound()
         rows = f.entities(etype)
-        show_all = query.get("show") == "all"
+        # Animals: "show only live animals" is ticked by default; a submitted form without
+        # it (`applied` but no `live`) shows the ones that left too.
+        show_all = query.get("show") == "all" or (
+            etype == "animals" and "applied" in query and not query.get("live"))
         series = query.get("series")
-        filters = {k: v for k, v in query.items() if k not in ("show", "series", "cols", "sort")}
+        filters = {k: v for k, v in query.items()
+                   if k not in ("show", "series", "cols", "sort", "live", "applied")}
         today = datetime.now().date().isoformat()
         out = []
         for r in rows:
             fl = fields(r)
-            if etype == "animals" and not show_all and gone(r, today):
+            if etype == "animals" and not show_all and (gone(r, today) or pedigree_only(r)):
                 continue
             if etype == "herds" and not show_all and f.idle(r):
                 continue
@@ -311,7 +421,8 @@ class App:
                 out.append(r)
         default_cols = {"animals": ["name", "sex", "born"], "herds": ["species"],
                         "paddocks": ["kind", "forage"]}.get(etype, [])
-        cols = [c for c in (query.get("cols") or "").split(",") if c] or \
+        # `cols` from the form, even empty (every column unticked); defaults otherwise
+        cols = [c for c in query["cols"].split(",") if c] if "cols" in query else \
             [c for c in default_cols if c in f.field_names(etype)]
         rest = f.rest() if etype == "paddocks" else None
         extra = {}
@@ -322,6 +433,8 @@ class App:
             elif etype == "herds":
                 extra[r["id"]] = {"size": f.herd_size(r),
                                   "paddocks": [o["paddock"] for o in f.occupying(herd=r["id"])]}
+            elif etype == "feeds":
+                extra[r["id"]] = {**f.feed_status(r["id"]), "sizes": feed_mod.sizes(fields(r))}
             elif etype == "paddocks":
                 extra[r["id"]] = {"rest": rest["effective"].get(r["id"], rest["exact"].get(r["id"])),
                                   "herds": [o["herd"] for o in f.occupying(paddock=r["id"])]}
@@ -347,9 +460,10 @@ class App:
         if not p.is_file():
             raise NotFound()
         text = p.read_text(encoding="utf-8-sig")
+        own = self.farm.q1("SELECT * FROM entities WHERE path=?", path)   # an item's file?
         if query.get("edit"):
-            return self.page("note_edit.html", path=path, text=text)
-        return self.page("note.html", path=path, html=self.renderer().document(text),
+            return self.page("note_edit.html", path=path, text=text, own=own)
+        return self.page("note.html", path=path, html=self.renderer().document(text), own=own,
                          warnings=self.farm.q("SELECT * FROM warnings WHERE path=? ORDER BY line", path))
 
     def r_note_save(self, path, form, **_):
@@ -357,8 +471,23 @@ class App:
         if not path.lower().endswith(".md"):
             raise WriteError("only .md files can be edited")
         writes.save_raw(p, form.get("text", ""))
+        name = (form.get("name") or "").strip()
+        if name and name != path.rsplit("/", 1)[-1][:-3]:
+            path = self._rename(path, name)["path"]
         self.farm.refresh()
-        raise Redirect(f"/n/{quote(path)}")
+        # an item's file goes back to the item's page; a note to the note
+        own = self.farm.q1("SELECT * FROM entities WHERE path=?", path)
+        raise Redirect(entity_url(own["id"], own["type"]) if own else f"/n/{quote(path)}")
+
+    def r_delete(self, path, **_):
+        """Move a file to `.trash/` (Obsidian's trash folder), so it can be got back."""
+        f = self.farm
+        if not path.lower().endswith(".md") or not writes.under(f.root, path).is_file():
+            raise WriteError(f"{path} isn't a note or item file")
+        row = f.q1("SELECT type FROM entities WHERE path=?", path)
+        writes.trash(f.root, path)
+        f.refresh()
+        raise Redirect(f"/{row['type']}" if row else "/")
 
     def r_lint(self, query, **_):
         rows = self.farm.warnings(include_info=query.get("all") == "1")
@@ -389,9 +518,20 @@ class App:
         when, approx = self._when(form)
         return writes.new_note(self.farm.root, self.farm.config, text, tags, when, approx)
 
+    def r_manifest(self, **_):
+        """Lets a phone add grazr to its home screen as an app."""
+        icons = [{"src": self.static_url(f"icon-{n}.png"), "sizes": f"{n}x{n}", "type": "image/png",
+                  "purpose": "any maskable"} for n in (192, 512)]
+        return ("application/manifest+json", json.dumps({
+            "name": "grazr", "short_name": "grazr", "start_url": "/", "scope": "/", "display": "standalone",
+            "background_color": "#fbfaf7", "theme_color": "#2f6b3a", "icons": icons}).encode())
+
     def r_new_note(self, query, **_):
+        f = self.farm
+        chips = [h["id"] for h in f.entities("herds") if not f.idle(h)]
+        chips += [r["id"] for r in f.entities("feeds")] if "feeds" in f.config.types else []
         return self.page("new_note.html", text=query.get("text", ""), tags=query.get("tags", ""),
-                         when=query.get("when", ""))
+                         when=query.get("when", ""), chips=chips)
 
     def r_new_note_save(self, form, **_):
         text = form.get("text", "").strip()
@@ -551,6 +691,43 @@ class App:
             as_of = datetime.strptime(query["as_of"][:10], "%Y-%m-%d").replace(hour=23, minute=59)
         return ("application/json", json.dumps(self.farm.map_data(as_of)).encode())
 
+    def r_api_rename(self, form, **_):
+        """Rename a file everywhere (the ✎ by its name). The editor's unsaved `text` for
+        `path` is saved first so its links are rewritten too."""
+        path = form.get("path") or ""
+        p = writes.under(self.farm.root, path)
+        if not path.lower().endswith(".md") or not p.is_file():
+            raise WriteError(f"{path} isn't a note or item file")
+        if form.get("text") is not None:
+            writes.save_raw(p, form["text"])
+        return ("application/json", json.dumps(self._rename(path, form.get("new", ""))).encode())
+
+    def _rename(self, path: str, new: str) -> dict:
+        """Rename a file and rewrite every link to it in every file. Works for an item's
+        file (paddock, herd, animal, ...) and for a plain note."""
+        f = self.farm
+        row = f.q1("SELECT * FROM entities WHERE path=?", path)
+        new = writes.safe_name(new)
+        if new.lower().endswith(".md"):
+            new = new[:-3]
+        if row is not None and row["type"] == "animals":
+            new = f.index.animal_ids.match(new) or new
+        resolver = f.resolver()
+        clash = resolver.resolve(new)
+        mine = (row is not None and clash.kind == "entity" and clash.id == row["id"]) or \
+            (clash.kind == "note" and clash.id == path)
+        if clash.kind in ("entity", "note") and not mine:
+            raise WriteError(f"{new} is already taken ({clash.etype or 'note'} {clash.id})")
+        if row is not None:
+            is_old = lambda t: (x := resolver.resolve(t)).kind == "entity" and x.id == row["id"]
+        else:
+            is_old = lambda t: (x := resolver.resolve(t)).kind == "note" and x.id == path
+        new_path, files, links = writes.rename(f.root, path, new, is_old)
+        f.refresh()
+        return {"old": row["id"] if row is not None else path.rsplit("/", 1)[-1][:-3], "new": new,
+                "files": files, "links": links, "path": new_path,
+                "url": entity_url(new, row["type"]) if row is not None else f"/n/{quote(new_path)}"}
+
     def r_api_complete(self, query, **_):
         kind, q = query.get("kind"), query.get("q", "").casefold()
         if kind == "tag":
@@ -637,7 +814,8 @@ def make_handler(app: App, port: int):
             if not origin:
                 return True
             host = urlparse(origin).netloc
-            return host == self.headers.get("Host")
+            # behind `tailscale serve` the page's host is the forwarded one
+            return host in (self.headers.get("Host"), self.headers.get("X-Forwarded-Host"))
 
         def _handle(self, method):
             url = urlparse(self.path)
@@ -681,7 +859,7 @@ def make_handler(app: App, port: int):
                                          message=f"Nothing at {path}").encode("utf-8"))
             except (WriteError, KeyError, ValueError) as e:
                 msg = str(e) if isinstance(e, WriteError) else f"{type(e).__name__}: {e}"
-                if path.startswith("/upload"):
+                if path.startswith(("/upload", "/api/")):
                     return self._send(400, json.dumps({"error": msg}).encode(), "application/json")
                 self._send(400, app.page("error.html", title="Couldn't save",
                                          message=msg).encode("utf-8"))

@@ -1,17 +1,21 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_list, map_head %}
 {% block title %}Map{% endblock %}
-{% block head %}{{ map_head() }}{% endblock %}
+{% block head %}{{ map_head() }}
+<link rel="stylesheet" href="{{ static('vendor/geoman/leaflet-geoman.css') }}">
+<script src="{{ static('vendor/geoman/leaflet-geoman.min.js') }}"></script>{% endblock %}
+{% block body_attrs %} class="fill"{% endblock %}
 {% block main %}
 <div class="home">
   <section>
     <div class="mapbar">
       <a class="btn" href="/draw">Draw paddock</a>
       <a class="btn" href="/move">Move a herd</a>
+      <button type="button" class="btn" id="measure" title="Measure a distance and area (M)">Measure <kbd>M</kbd></button>
     </div>
-    <div id="map" class="map" data-config='{{ app.map_config()|tojson }}'></div>
+    <div id="map" class="map fill" data-config='{{ app.map_config()|tojson }}'></div>
   </section>
-  <section>
+  <section class="feed">
     <div class="titlebar"><h2 style="margin:0">Recent</h2>
       <div class="actions"><a class="btn primary" href="/new">+ Note</a></div></div>
     {{ entry_list(entries, "No dated entries yet. Write a note, or run grazr in your data folder.") }}
@@ -20,6 +24,8 @@
 {% endblock %}
 {% block scripts %}
 <script>
-grazr.restMap(document.getElementById("map"));
+grazr.restMap(document.getElementById("map")).then(({map, cfg, outlines}) => {
+  grazr.measureTool(map, cfg, outlines, document.getElementById("measure"));
+});
 </script>
 {% endblock %}

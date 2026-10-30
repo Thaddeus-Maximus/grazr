@@ -6,6 +6,13 @@
   <code>[[Herd]] -> [[Paddock]]</code> moves a herd; <code>@yesterday 6pm</code> back-dates a line.
   Paste or drop photos into the text.</p>
 <form method="post" action="/new">
+  <div class="chips" data-insert-for="text">
+    <button type="button" data-ins="[[" title="link: then type a name">[[ ]]</button>
+    <button type="button" data-ins="-> [[" title="a herd move: [[Herd]] -> [[Paddock]]">→ move</button>
+    <button type="button" data-ins="#" title="a tag">#</button>
+    <button type="button" data-ins="@yesterday " data-at-start title="back-date this line">@yesterday</button>
+    {% for c in chips %}<button type="button" data-ins="[[{{ c }}]] ">{{ c }}</button>{% endfor %}
+  </div>
   <div class="editor-wrap"><textarea id="text" name="text" rows="12" data-editor autofocus>{{ text }}</textarea></div>
   <div class="row" style="margin-top:.5rem">
     <label for="when" style="margin:0">When</label>

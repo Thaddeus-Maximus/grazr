@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config as config_mod
+from . import feed as feed_mod
 from . import geo
 from .derive import Derived, derive
 from .frontmatter import load as load_fm
@@ -18,7 +19,7 @@ from .model import Entity, build as build_entity
 from .parse import IMAGE_EXT, Note, Warning, find_images, parse_note
 from .paths import iter_markdown, rel, state_dir
 
-SCHEMA = 6
+SCHEMA = 8
 TS = "%Y-%m-%dT%H:%M"
 UNKNOWN = "unknown"   # entities.left_on for `left: unknown`
 
@@ -40,6 +41,7 @@ CREATE TABLE memberships (animal TEXT, herd TEXT, start TEXT, end TEXT, inherite
 CREATE TABLE occupancies (herd TEXT, paddock TEXT, start TEXT, end TEXT, path TEXT, line INTEGER);
 CREATE TABLE exits (animal TEXT PRIMARY KEY, ts TEXT, kind TEXT, weight REAL, unit TEXT, basis TEXT, cause TEXT, path TEXT, line INTEGER);
 CREATE TABLE heads (herd TEXT, count INTEGER, start TEXT, end TEXT, path TEXT, line INTEGER);
+CREATE TABLE feed_events (path TEXT, line INTEGER, ts TEXT, feed TEXT, kind TEXT, lb REAL, written TEXT, herds TEXT);
 CREATE TABLE faces (id INTEGER PRIMARY KEY, geojson TEXT, acres REAL);
 CREATE TABLE face_paddocks (face_id INTEGER, paddock TEXT);
 CREATE TABLE warnings (path TEXT, line INTEGER, code TEXT, severity TEXT, message TEXT, fix TEXT);
@@ -54,6 +56,7 @@ CREATE INDEX memberships_animal ON memberships(animal);
 CREATE INDEX memberships_herd ON memberships(herd);
 CREATE INDEX occupancies_herd ON occupancies(herd);
 CREATE INDEX occupancies_paddock ON occupancies(paddock);
+CREATE INDEX feed_events_feed ON feed_events(feed, ts);
 """
 
 
@@ -135,7 +138,8 @@ class Index:
                 force = True
             seen = set()
             changed = force
-            for p in iter_markdown(self.root):
+            conflicts: list[Path] = []
+            for p in iter_markdown(self.root, conflicts):
                 r = rel(self.root, p)
                 seen.add(r)
                 try:
@@ -150,6 +154,10 @@ class Index:
             for gone in set(self.cache) - seen:
                 del self.cache[gone]
                 changed = True
+            conflicts = sorted(rel(self.root, p) for p in conflicts)
+            if conflicts != getattr(self, "conflicts", []):
+                changed = True
+            self.conflicts = conflicts
             if changed:
                 self._rebuild()
                 self.generation += 1
@@ -172,14 +180,36 @@ class Index:
                 ent.warnings.append(Warning(r, 1, "bad-frontmatter", err, "error"))
             if etype == "paddocks":
                 geo.check(ent)
+            ent.log = self._item_log(r, stem, text)
             parsed = ent
         else:
             parsed = parse_note(r, text, self.animal_ids, tuple(self.config["exit_words"]))
         self.cache[r] = _Cached(s.st_mtime, s.st_size, kind, etype, text, parsed)
 
+    def _item_log(self, r: str, stem: str, text: str):
+        """Dated lines in an item's own file are entries about that item (undated ones
+        are its description). Each gets a link to the item in front, so it reads right
+        in the feed and on herd or parent pages. Moves, heads and exits are still read
+        from the line as written, so `weaned [[x]] -> [[Lambs]]` in a dam's file moves
+        only the lamb."""
+        log = parse_note(r, text, self.animal_ids, tuple(self.config["exit_words"]))
+        log.warnings = [w for w in log.warnings if w.code != "undated"]
+        log.entries = [e for e in log.entries if e.stamp is not None]
+        me = norm(stem)
+        for e in log.entries:
+            if not any(norm(t) == me or norm(self.animal_ids.match(t) or "") == me for t in e.links):
+                prefix = f"[[{stem}]] "
+                e.text = prefix + e.text
+                e.links.insert(0, stem)
+                e.bare = [(s + len(prefix), end + len(prefix), c) for s, end, c in e.bare]
+        return log
+
     # --- rebuild ---------------------------------------------------------
     def _rebuild(self):
-        warnings: list[Warning] = []
+        warnings: list[Warning] = [
+            Warning(c, 1, "sync-conflict", "a sync tool's conflict copy: merge what's new in it into the "
+                    "original, then delete it (grazr ignores it until then)", "error")
+            for c in getattr(self, "conflicts", [])]
         entities: dict[str, Entity] = {}
         seen_norm: dict[str, str] = {}
         for r in sorted(self.cache, key=str.casefold):
@@ -205,8 +235,15 @@ class Index:
             seen_norm.setdefault(key, e.id)
             entities[e.id] = e
         notes = {r: c.parsed for r, c in self.cache.items() if c.kind == "note"}
+        notes.update({e.path: e.log for e in entities.values() if e.log is not None})
+        self.aliases = {}                       # `aliases: [screenings]` → [[screenings]] links to it
+        for k, e in entities.items():
+            al = e.fields.get("aliases") or []
+            for a in [al] if isinstance(al, str) else al:
+                if str(a).strip():
+                    self.aliases.setdefault(str(a).strip(), k)
         resolver = Resolver(self.animal_ids, {k: e.type for k, e in entities.items()},
-                            {r: None for r in self.cache})
+                            {r: None for r in self.cache}, self.aliases)
         rcache: dict[str, object] = {}
 
         def resolve(t):
@@ -239,6 +276,50 @@ class Index:
 
         images = self.images = self._image_lookup()
         self._write(entities, notes, der, resolve, polys, images, warnings)
+
+    def _feed(self, en, resolve, feeds, feed_sizes, feed_aliases, rows, warnings):
+        """Feed events in one entry (§6.6): an amount next to a feed link is used by the
+        herds the entry links, bought (`bought`, `picked up`, ...) or counted (`= 20 lb`).
+        `per day` makes it a standing rate, until another rate or `stopped feeding [[x]]`.
+        A feed written as an amount but not linked gets a lint fix."""
+        linked = set()
+        herds = []
+        for t in en.links + en.inherited:
+            r = resolve(t)
+            if r.kind == "entity" and r.etype == "herds" and r.id not in herds:
+                herds.append(r.id)
+            if r.kind == "entity" and r.etype == "feeds":
+                linked.add(r.id)
+        when = ts(en.stamp.dt) if en.stamp else None
+        amounted = set()
+        for a in feed_mod.amounts(en.text):
+            r = resolve(a.feed_target)
+            if r.kind != "entity" or r.etype != "feeds":
+                continue
+            if a.implied and not feed_mod.is_measure(a.unit, feed_sizes[r.id]):
+                continue                        # `rest of [[Hay]]`: not an amount
+            lb = feed_mod.pounds(a, feed_sizes[r.id])
+            written = f"{a.qty:g} {a.unit}".strip()
+            if lb is None:
+                warnings.append(Warning(en.path, en.line, "feed-unit",
+                                        f"how much is a {feed_mod.unit_name(a.unit)} of {r.id}? Add it to "
+                                        f"`sizes` in {feeds[r.id].path}, e.g. `sizes: {{{feed_mod.unit_name(a.unit)}: 20}}` (pounds)"))
+                continue
+            kind = "count" if a.op == "=" else "buy" if feed_mod.BUY.search(en.text) \
+                else "rate" if feed_mod.RATE.search(en.text + "\n" + en.context) else "use"   # `- daily:` above it too
+            rows.append((en.path, en.line, when, r.id, kind, lb, written, json.dumps(herds)))
+            amounted.add(r.id)
+        if feed_mod.STOP.search(en.text):               # `stopped feeding [[Corn]] to [[Ewes]]`
+            for fid in linked - amounted:
+                rows.append((en.path, en.line, when, fid, "stop", 0.0, "", json.dumps(herds)))
+        for fid, aliases in feed_aliases.items():
+            if fid in linked:
+                continue
+            hit = feed_mod.unlinked(en.text, aliases, feed_sizes[fid])
+            if hit:
+                to = fid if hit == fid else f"{fid}|{hit}"
+                warnings.append(Warning(en.path, en.line, "unlinked-feed", f"{hit!r} looks like [[{fid}]]",
+                                        fix={"kind": "link", "text": hit, "to": to}))
 
     def _check_link(self, path, line, target, r, warnings, text_line=None):
         if r.kind == "unresolved":
@@ -302,6 +383,14 @@ class Index:
                 img_rows.append((None, e.id, img, self._find_image(images, img, e.path)))
 
         move_kind = {(mv.path, mv.line): mv.kind for mv in der.moves}
+        feeds = {k: e for k, e in entities.items() if e.type == "feeds"}
+        feed_sizes = {k: feed_mod.sizes(e.fields) for k, e in feeds.items()}
+        feed_aliases = {}
+        for k, e in feeds.items():
+            al = e.fields.get("aliases") or []
+            al = [al] if isinstance(al, str) else [str(a) for a in al]
+            feed_aliases[k] = [k] + [a.strip() for a in al if str(a).strip()]
+        feed_rows = []
         entry_rows, mention_rows, tag_rows = [], [], []
         eid = 0
         for n in notes.values():
@@ -323,6 +412,8 @@ class Index:
                             attached = attached or r.kind == "entity"
                 if not attached and en.move is None:
                     warnings.append(Warning(en.path, en.line, "unattached", "entry mentions nothing", "info"))
+                if feeds:
+                    self._feed(en, resolve, feeds, feed_sizes, feed_aliases, feed_rows, warnings)
                 tag_rows.extend((eid, t) for t in en.tags)
                 for img in en.images:
                     found = self._find_image(images, img, en.path)
@@ -357,6 +448,7 @@ class Index:
             "exits": [(x.animal, ts(x.dt), x.kind, x.weight, x.unit, x.basis, x.cause, x.path, x.line)
                       for x in der.exits],
             "heads": [(h.herd, h.count, ts(h.start), ts(h.end), h.path, h.line) for h in der.heads],
+            "feed_events": feed_rows,
             "faces": face_rows,
             "face_paddocks": fp_rows,
             "warnings": [(w.path, w.line, w.code, w.severity, w.message,

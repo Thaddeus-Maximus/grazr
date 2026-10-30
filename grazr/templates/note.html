@@ -1,9 +1,13 @@
 {% extends "base.html" %}
+{% from "_macros.html" import delete_form %}
 {% block title %}{{ path }}{% endblock %}
 {% block main %}
 <div class="titlebar">
-  <h1>{{ path }}</h1>
-  <div class="actions"><a class="btn" href="/n/{{ path|q }}?edit=1">Edit raw</a></div>
+  <h1>{{ path }} <button type="button" class="icon" data-rename="{{ path }}" title="Rename this file and every link to it">✎</button></h1>
+  <div class="actions">
+    {% if own %}<a class="btn primary" href="{{ own.id|eurl }}">Back to {{ own.id }}</a>{% endif %}
+    <a class="btn" href="/n/{{ path|q }}?edit=1">Edit raw</a>
+    <button type="submit" form="delete" class="danger">Delete</button></div>
 </div>
 {% if warnings %}
 <div class="panel" style="margin-bottom:1rem">
@@ -11,4 +15,5 @@
 </div>
 {% endif %}
 <article class="panel note">{{ html }}</article>
+{{ delete_form(path) }}
 {% endblock %}

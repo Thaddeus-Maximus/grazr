@@ -78,13 +78,15 @@ class Resolved:
 
 class Resolver:
     def __init__(self, animal_ids: AnimalIds, entities: dict[str, str],
-                 notes: dict[str, str]):
+                 notes: dict[str, str], aliases: dict[str, str] | None = None):
         """
         entities: entity ID → type.  notes: note path → (unused) for stems.
+        aliases: an entity's other names (`aliases:` in its file) → its ID.
         """
         self.animal_ids = animal_ids
         self.entity_type = entities
         self._entities = {norm(i): i for i in entities}
+        self._aliases = {norm(a): i for a, i in (aliases or {}).items() if i in entities}
         self._notes: dict[str, str] = {}
         for path in notes:
             stem = path.rsplit("/", 1)[-1]
@@ -105,6 +107,9 @@ class Resolver:
             if eid:
                 return Resolved("entity", eid, self.entity_type[eid], shorthand=short)
             return Resolved("unresolved", animal, "animals", shorthand=short)
+        if key in self._aliases:
+            eid = self._aliases[key]
+            return Resolved("entity", eid, self.entity_type[eid])
         if key == NONE_ID:
             return Resolved("none", NONE_ID)
         if key in self._notes:

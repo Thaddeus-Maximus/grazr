@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source %}
+{% block body_attrs %} class="fill"{% endblock %}
 {% block title %}{{ e.id }}{% endblock %}
 {% block main %}
 <div class="titlebar">
@@ -52,6 +53,11 @@
     {% else %}<p class="muted">No animals. Move some in from another herd or the animals list.</p>{% endif %}
     {% endif %}
 
+    {% if feed %}
+    <h2>Feed, last 30 days</h2>
+    <table>{% for x in feed %}<tr><td>{{ elink(x.feed) }}</td><td>{{ x.lb|lb }}</td><td class="muted small">{{ x.times }} time{{ "" if x.times == 1 else "s" }}</td></tr>{% endfor %}</table>
+    {% endif %}
+
     <h2>Grazing</h2>
     {% if occupancies %}
     <table>
@@ -67,7 +73,7 @@
     {% endif %}
     {{ photo_grid(photos) }}
   </div>
-  <div>
+  <div class="tl-col">
     <h2 style="margin-top:0">Timeline</h2>
     {{ entry_list(timeline, filter="other") }}
   </div>

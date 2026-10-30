@@ -11,47 +11,69 @@
 </div>
 <form class="row panel" method="get" style="margin-bottom:1rem">
   {% if etype == "animals" and series %}
-  <select name="series"><option value="">all series</option>
+  <select name="series" onchange="this.form.requestSubmit()"><option value="">all series</option>
     {% for s in series %}<option {% if query.series == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
   {% endif %}
   {% for k, v in filters.items() %}
   <span class="badge">{{ k }} {{ "has a value" if v == "*" else "is empty" if v == "!" else "= " ~ v }}
     <input type="hidden" name="{{ k }}" value="{{ v }}"></span>
   {% endfor %}
-  <select id="fk"><option value="">filter by…</option>{% for k in all_fields %}<option>{{ k }}</option>{% endfor %}</select>
-  <input id="fv" placeholder="value, * = any, ! = empty" size="20">
+  <select id="fk" class="wide-only"><option value="">filter by…</option>{% for k in all_fields %}<option>{{ k }}</option>{% endfor %}</select>
+  <input id="fv" class="wide-only" placeholder="value, * = any, ! = empty" size="20">
   <input type="hidden" name="cols" value="{{ cols|join(',') }}">
-  {% if etype in ("animals", "herds") %}
+  <input type="hidden" name="sort" value="{{ query.sort or '' }}">
+  {% if etype == "animals" %}
+  <input type="hidden" name="applied" value="1">
+  <label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="live" value="1" {% if not show_all %}checked{% endif %}
+    onchange="this.form.requestSubmit()"> show only live animals</label>
+  {% elif etype == "herds" %}
   <label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="show" value="all" {% if show_all %}checked{% endif %}>
-    show {{ "animals that left" if etype == "animals" else "idle herds" }}</label>
+    show idle herds</label>
   {% endif %}
-  <button>Apply</button>
+  <button class="wide-only">Apply</button>
   {% if filters or query.series %}<a href="/{{ etype }}">clear</a>{% endif %}
-  <span class="muted small" style="margin-left:auto">columns:
-    <select id="cols" multiple size="1" title="ctrl-click to choose columns">{% for k in all_fields %}<option {% if k in cols %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></span>
+  {% if all_fields %}
+  <details class="colpick" style="margin-left:auto">
+    <summary class="btn">Columns{% if cols %} ({{ cols|length }}){% endif %}</summary>
+    <div class="menu">
+      {% for k in all_fields %}<label><input type="checkbox" value="{{ k }}" {% if k in cols %}checked{% endif %}> {{ k }}</label>{% endfor %}
+    </div>
+  </details>
+  {% endif %}
 </form>
 
 <form method="post" action="/move-animals">
 <input type="hidden" name="next" value="/animals">
-<table>
-  <tr>
+<table data-sortable>
+  <thead><tr>
     {% if etype == "animals" %}<th><input type="checkbox" data-check-all="input[name=animal]"></th>{% endif %}
-    <th>ID</th>
-    {% if etype == "animals" %}<th>Herd</th>{% elif etype == "herds" %}<th>Size</th><th>On</th>{% elif etype == "paddocks" %}<th>Acres</th><th>Rested</th><th>Herds</th>{% endif %}
-    {% for c in cols %}<th>{{ c }}</th>{% endfor %}
-  </tr>
+    <th data-key="id">ID</th>
+    {% if etype == "animals" %}<th data-key="herd">Herd</th>{% elif etype == "herds" %}<th data-key="size">Size</th><th data-key="on">On</th>
+    {%- elif etype == "feeds" %}<th data-key="onhand">On hand</th><th data-key="perday">Per day</th><th data-key="daysleft">Days left</th><th data-key="used30">Used, 30 days</th>
+    {%- elif etype == "paddocks" %}<th data-key="acres">Acres</th><th data-key="perimeter">Perimeter</th><th data-key="rested">Rested</th><th data-key="herds">Herds</th>{% endif %}
+    {% for c in cols %}<th data-key="f:{{ c }}">{{ c }}</th>{% endfor %}
+  </tr></thead>
+  <tbody>
   {% for r in rows %}{% set f = fields(r) %}{% set x = extra.get(r.id, {}) %}
   <tr>
     {% if etype == "animals" %}<td><input type="checkbox" name="animal" value="{{ r.id }}"></td>{% endif %}
-    <td>{{ elink(r.id) }}{% if gone(r) %} <span class="badge left">{{ x.exit.kind if x.exit else "left" }}</span>{% endif %}</td>
+    <td data-sort="{{ r.id }}">{{ elink(r.id) }}{% if etype == "animals" and pedigree_only(r) %} <span class="badge via">pedigree only</span>
+      {%- elif gone(r) %} <span class="badge left">{{ x.exit.kind if x.exit else "left" }}</span>{% endif %}</td>
     {% if etype == "animals" %}<td>{% if x.herd %}{{ elink(x.herd) }}{% endif %}</td>
     {% elif etype == "herds" %}<td>{{ x.size if x.size is not none else "" }}{% if r.anonymous %} head{% endif %}</td>
       <td>{% for p in x.paddocks %}{{ elink(p) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
-    {% elif etype == "paddocks" %}<td>{{ r.acres|acres }}</td><td>{{ x.rest|days if r.acres else "" }}</td>
+    {% elif etype == "feeds" %}<td data-sort="{{ x.on_hand if x.on_hand is not none else '' }}">{{ x.on_hand|lb(x.sizes) if x.on_hand is not none else "" }}</td>
+      <td data-sort="{{ x.per_day or '' }}">{{ x.per_day|lb if x.per_day else "" }}</td>
+      <td data-sort="{{ x.days_left if x.days_left is not none else '' }}">{{ "%.0f"|format(x.days_left) if x.days_left is not none else "" }}</td>
+      <td data-sort="{{ x.used_30 }}">{{ x.used_30|lb if x.used_30 else "" }}</td>
+    {% elif etype == "paddocks" %}<td data-sort="{{ r.acres if r.acres is not none else '' }}">{{ r.acres|acres }}</td><td>{{ r|fence }}</td>
+      <td data-sort="{{ x.rest if r.acres and x.rest is not none else '' }}">{{ x.rest|days if r.acres else "" }}</td>
       <td>{% for h in x.herds %}{{ elink(h) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>{% endif %}
-    {% for c in cols %}<td>{% set v = f.get(c) %}{% if v is string %}{{ v|inline }}{% elif v is not none %}{{ v }}{% endif %}</td>{% endfor %}
+    {% for c in cols %}{% set v = f.get(c) %}<td{% if c == "born" and r.born %} data-sort="{{ r.born }}"{% endif %}>
+      {%- if v is string %}{{ v|inline }}{% elif v is not none %}{{ v }}{% endif %}</td>{% endfor %}
   </tr>
   {% endfor %}
+  </tbody>
 </table>
 {% if etype == "animals" and rows %}
 <div class="row" style="margin-top:.6rem">
@@ -70,8 +92,14 @@ document.querySelector("form.row").addEventListener("submit", (ev) => {
   const k = document.getElementById("fk").value, v = document.getElementById("fv").value.trim();
   const form = ev.target;
   if (k) { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v || "*"; form.appendChild(i); }
-  const cols = [...document.getElementById("cols").selectedOptions].map((o) => o.value);
-  form.querySelector("input[name=cols]").value = cols.join(",");
 });
+// columns: ticking one keeps the current order and adds the new column at the end
+document.querySelectorAll(".colpick input[type=checkbox]").forEach((box) => box.addEventListener("change", () => {
+  const form = box.form, input = form.querySelector("input[name=cols]");
+  const cols = input.value.split(",").filter(Boolean).filter((c) => c !== box.value);
+  if (box.checked) cols.push(box.value);
+  input.value = cols.join(",");
+  form.requestSubmit();
+}));
 </script>
 {% endblock %}

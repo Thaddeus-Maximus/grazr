@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source, map_head %}
+{% block body_attrs %} class="fill"{% endblock %}
 {% block title %}{{ e.id }}{% endblock %}
 {% block head %}{% if polygon %}{{ map_head() }}{% endif %}{% endblock %}
 {% block main %}
 <div class="titlebar">
   <h1>{{ e.id }}</h1>
-  {% if e.acres %}<span class="muted">{{ e.acres|acres }} acres</span>{% endif %}
+  {% if e.acres %}<span class="muted">{{ e.acres|acres }} acres · {{ e|fence }} perimeter</span>{% endif %}
   {% if e.parent %}<span>in {{ elink(e.parent) }}</span>{% endif %}
   <div class="actions">
     <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
@@ -39,7 +40,7 @@
     {% else %}<p class="muted">Never grazed.</p>{% endif %}
     {{ photo_grid(photos) }}
   </div>
-  <div>
+  <div class="tl-col">
     <h2 style="margin-top:0">Timeline</h2>
     {{ entry_list(timeline, filter="entries about paddocks inside") }}
   </div>

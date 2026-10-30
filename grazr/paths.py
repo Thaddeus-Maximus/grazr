@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -26,12 +27,22 @@ def rel(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-def iter_markdown(root: Path):
-    """Every .md file under the root, skipping .grazr/ and other dot-folders."""
+# a sync tool's copy of a file both sides changed: Syncthing's `x.sync-conflict-20261015-
+# 101500-ABCDEFG.md`, Dropbox's/OneDrive's `x (conflicted copy ...).md`, `x.conflict.md`
+CONFLICT = re.compile(r"\.sync-conflict-\d{8}-\d{6}|\(conflicted copy|\.conflict\.md$", re.I)
+
+
+def iter_markdown(root: Path, conflicts: list[Path] | None = None):
+    """Every .md file under the root, skipping .grazr/ and other dot-folders, and sync
+    conflict copies (their entries would count twice); those go in `conflicts`."""
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
         for name in sorted(filenames):
             if name.lower().endswith(".md"):
+                if CONFLICT.search(name):
+                    if conflicts is not None:
+                        conflicts.append(Path(dirpath) / name)
+                    continue
                 yield Path(dirpath) / name
 
 

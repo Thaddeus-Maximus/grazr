@@ -2,18 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6b3a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{{ static('icon-192.png') }}">
+<link rel="apple-touch-icon" href="{{ static('icon-192.png') }}">
 <title>{% block title %}grazr{% endblock %} · grazr</title>
 <link rel="stylesheet" href="{{ static('app.css') }}">
 <style>{{ app.tag_styles()|safe }}</style>
 {% block head %}{% endblock %}
 </head>
-<body>
+<body{% block body_attrs %}{% endblock %}>
 <header class="top">
   <a class="brand" href="/">grazr</a>
   <nav>
-    <a href="/">Map</a>
-    {% for t in app.types() %}<a href="/{{ t }}">{{ t|capitalize }}</a>{% endfor %}
+    <a href="/" data-match="/">Map</a>
+    {% for t in app.types() %}<a href="/{{ t }}" data-match="/{{ t }} /{{ app.type_prefix(t) }}/">{{ t|capitalize }}</a>{% endfor %}
     <a href="/new">+ Note</a>
     <a href="/move">Move</a>
     <a href="/lint">Lint{% set n = app.warning_count() %}{% if n %} <span class="lintcount">{{ n }}</span>{% endif %}</a>
@@ -21,8 +25,23 @@
   <form action="/search"><input type="search" name="q" placeholder="Search or jump to…" value="{{ q|default('') }}"></form>
 </header>
 <main>
+<div class="flash" id="renamed" hidden></div>
 {% block main %}{% endblock %}
 </main>
+{# phones: the header's links move to a tab bar at the bottom #}
+<nav class="tabbar">
+  <a href="/" data-match="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg><span>Map</span></a>
+  <a href="/new" class="add" data-match="/new"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Note</span></a>
+  <details class="more">
+    <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu{% if n %} <span class="lintcount">{{ n }}</span>{% endif %}</span></summary>
+    <div class="sheet">
+      {% for t in app.types() %}<a href="/{{ t }}" data-match="/{{ t }} /{{ app.type_prefix(t) }}/">{{ t|capitalize }}</a>{% endfor %}
+      <a href="/move" data-match="/move">Move a herd</a>
+      <a href="/lint" data-match="/lint">Lint{% if n %} <span class="lintcount">{{ n }}</span>{% endif %}</a>
+      <a href="/draw" data-match="/draw">Draw paddock</a>
+    </div>
+  </details>
+</nav>
 <script src="{{ static('app.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>

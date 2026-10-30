@@ -8,7 +8,8 @@ from pathlib import Path
 from ruamel.yaml import YAML
 
 from . import frontmatter
-from .paths import atomic_write
+from .ids import link_target
+from .paths import atomic_write, iter_markdown
 
 _BAD_NAME = re.compile(r'[\\/:*?"<>|#^\[\]]')
 
@@ -38,7 +39,7 @@ def link(i: str) -> str:
 
 def new_note(root: Path, config, text: str, tags: list[str] = (), when: datetime | None = None,
              approx: bool = False, now: datetime | None = None) -> str:
-    """Write `notes/<when>.md` (default: now); → its root-relative path.
+    """Write `<notes_dir>/<when>.md` (default: now); → its root-relative path.
 
     A backdated note is named by its own time, like one written then. When only
     the day is known (`approx`), a `Date:` line marks its entries as approximate.
@@ -48,7 +49,7 @@ def new_note(root: Path, config, text: str, tags: list[str] = (), when: datetime
     if when > now + timedelta(minutes=5):
         raise WriteError(f"{when:%d %b %Y %H:%M} is in the future")
     stem = when.strftime(config["note_filename"])
-    folder = root / "notes"
+    folder = under(root, (config["notes_dir"] or "").strip("/\\") or ".")
     path = folder / f"{stem}.md"
     n = 2
     while path.exists():
@@ -116,6 +117,61 @@ def edit_properties(path: Path, values: dict[str, str], removed: list[str]) -> N
 
 def save_raw(path: Path, text: str) -> None:
     atomic_write(path, text.replace("\r\n", "\n"))
+
+
+_WIKILINK = re.compile(r"\[\[([^\]\n]+)\]\]")
+
+
+def relink(text: str, is_old, new: str) -> tuple[str, int]:
+    """Point every `[[link]]` (or `![[embed]]`) whose target `is_old` at `new`, keeping
+    any `#heading` and `|alias`. → (text, links changed)."""
+    n = 0
+
+    def sub(m):
+        nonlocal n
+        inner = m.group(1)
+        if not is_old(link_target(inner)):
+            return m.group(0)
+        n += 1
+        cut = min((i for i in (inner.find("#"), inner.find("|")) if i >= 0), default=len(inner))
+        return f"[[{new}{inner[cut:]}]]"
+
+    return _WIKILINK.sub(sub, text), n
+
+
+def rename(root: Path, path: str, new: str, is_old) -> tuple[str, int, int]:
+    """Rename the entity file at `path` to `new` and rewrite every link to it in every
+    file. → (new path, files changed, links changed). Bare mentions are left alone."""
+    new = safe_name(new)
+    src = under(root, path)
+    dst = src.with_name(f"{new}.md")
+    if dst.exists() and not dst.samefile(src):
+        raise WriteError(f"{dst.relative_to(root).as_posix()} already exists")
+    files = links = 0
+    for p in iter_markdown(root):
+        text = p.read_text(encoding="utf-8-sig")
+        out, n = relink(text, is_old, new)
+        if n:
+            atomic_write(p, out)
+            files += 1
+            links += n
+    if dst != src:
+        src.rename(dst)   # also a case-only rename on Windows
+    return dst.relative_to(root).as_posix(), files, links
+
+
+def trash(root: Path, path: str) -> str:
+    """Move a file into `.trash/` under the root, keeping its folders (dot-folders aren't
+    indexed). → its new root-relative path."""
+    src = under(root, path)
+    dst = root / ".trash" / path
+    n = 2
+    while dst.exists():
+        dst = root / ".trash" / Path(path).with_name(f"{Path(path).stem} {n}{Path(path).suffix}")
+        n += 1
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    src.rename(dst)
+    return dst.relative_to(root).as_posix()
 
 
 def save_upload(root: Path, filename: str, data: bytes, now: datetime | None = None) -> str:

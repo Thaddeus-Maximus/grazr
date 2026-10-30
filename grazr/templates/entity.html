@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_list, prop_list, photo_grid %}
+{% block body_attrs %} class="fill"{% endblock %}
 {% block title %}{{ e.id }}{% endblock %}
 {% block main %}
 <div class="titlebar">
@@ -14,6 +15,6 @@
     <div class="panel">{{ prop_list(props) }}{% if body %}<div class="note">{{ body }}</div>{% endif %}</div>
     {{ photo_grid(photos) }}
   </div>
-  <div><h2 style="margin-top:0">Timeline</h2>{{ entry_list(timeline, filter="other") }}</div>
+  <div class="tl-col"><h2 style="margin-top:0">Timeline</h2>{{ entry_list(timeline, filter="other") }}</div>
 </div>
 {% endblock %}

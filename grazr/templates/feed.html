@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entry_list, prop_list, photo_grid, elink, source %}
+{% block body_attrs %} class="fill"{% endblock %}
+{% block title %}{{ e.id }}{% endblock %}
+{% block main %}
+<div class="titlebar">
+  <h1>{{ e.id }}</h1><span class="muted">feed</span>
+  <div class="actions">
+    <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
+    <a class="btn" href="/edit/{{ e.id|q }}">Edit properties</a>
+    <a class="btn" href="/n/{{ e.path|q }}?edit=1">Edit file</a>
+  </div>
+</div>
+<div class="stats">
+  <div><span class="muted small">On hand</span>
+    <b>{% if st.on_hand is not none %}{{ st.on_hand|lb(sizes) }}{% else %}unknown{% endif %}</b>
+    <span class="muted small">{% if st.counted %}counted {{ st.counted|ts }}{% elif st.on_hand is none %}record a count or a purchase{% else %}from purchases{% endif %}</span></div>
+  <div><span class="muted small">Per day</span><b>{{ st.per_day|lb(sizes) if st.per_day else "—" }}</b>
+    <span class="muted small">{% if st.rates %}standing rate{{ "s" if st.rates|length > 1 }}, since {{ st.rates[-1].ts|ts }}{% else %}average over the last {{ rate_days }} days{% endif %}</span></div>
+  <div><span class="muted small">Days left</span><b>{{ "%.0f"|format(st.days_left) if st.days_left is not none else "—" }}</b>
+    <span class="muted small">at that rate</span></div>
+  <div><span class="muted small">Used, last 30 days</span><b>{{ st.used_30|lb(sizes) }}</b></div>
+</div>
+
+<form method="post" action="/feed/{{ e.id|q }}" class="panel row" style="margin:1rem 0">
+  <select name="kind">
+    <option value="use">Fed</option><option value="rate">Feeding daily</option><option value="stop">Stopped feeding</option>
+    <option value="buy">Bought</option><option value="count">On hand now</option>
+  </select>
+  <span data-amount><input name="qty" required size="5" placeholder="amount" inputmode="decimal">
+  <select name="unit">{% for u in units %}<option>{{ u }}</option>{% endfor %}</select></span>
+  <span data-for="use">to <select name="herd">{% for h in herds %}<option>{{ h }}</option>{% endfor %}<option value="">(no herd)</option></select></span>
+  <input name="when" type="datetime-local" title="when (blank = now)">
+  <input name="comment" placeholder="comment">
+  <button class="primary">Record</button>
+  <span class="muted small">Writes a note line like <code>Fed 1 bucket [[{{ e.id }}]] to [[Ewes]]</code></span>
+</form>
+
+<div class="cols">
+  <div>
+    {% if chart.points %}<h2 style="margin-top:0">On hand</h2>
+    <div class="panel feed-chart"><div id="onhand" data-chart='{{ chart|tojson }}'></div></div>{% endif %}
+    <div class="panel">{{ prop_list(props) }}{% if body %}<div class="note">{{ body }}</div>{% endif %}
+      <p class="muted small" style="margin-bottom:0">Amounts are kept in pounds. <code>sizes</code> says what this feed's
+        other measures weigh, e.g. <code>sizes: {bucket: 20, bale: 50}</code>.</p></div>
+    {% if by_herd %}
+    <h2>Eaten, last 30 days</h2>
+    <table>{% for h, lb in by_herd %}<tr><td>{{ elink(h) if h else "no herd" }}</td><td>{{ lb|lb(sizes) }}</td></tr>{% endfor %}</table>
+    {% endif %}
+    <h2>Ledger</h2>
+    {% if ledger %}
+    <table>
+      <tr><th>When</th><th></th><th>Amount</th><th>On hand</th><th></th></tr>
+      {% for x in ledger|reverse %}
+      <tr><td class="small">{{ x.ts|ts }}{% if x.daily and x.days > 1 %} to {{ x.until|ts }}{% endif %}</td>
+        <td>{% if x.daily %}fed daily{% if x.days > 1 %}, {{ x.days }} days{% endif %}
+          {%- else %}{{ {"use": "fed", "buy": "bought", "count": "counted", "rate": "started daily", "stop": "stopped"}[x.kind] }}{% endif %}
+          {%- if x.kind in ("use", "rate", "stop") and x.herds %} {{ "for" if x.kind == "stop" else "to" }} {% for h in x.herds %}{{ elink(h) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</td>
+        <td>{% if x.daily %}{{ x.lb|lb(sizes) }}
+          {%- elif x.kind == "rate" %}{{ x.written }} a day{% if x.written.split()|length > 1 and x.written.split()[1] != "lb" %} <span class="muted small">({{ x.lb|lb }})</span>{% endif %}{% if x.active %} <span class="badge">running</span>{% endif %}
+          {%- else %}{{ x.written }}{% if x.written.split()|length > 1 and x.written.split()[1] != "lb" %} <span class="muted small">({{ x.lb|lb }})</span>{% endif %}{% endif %}</td>
+        <td>{{ x.on_hand|lb if x.on_hand is not none else "" }}</td>
+        <td>{{ source(x.path, x.line) }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">Nothing recorded yet. Use the form above, or write e.g. <code>[[{{ e.id }}]] = 20 buckets</code> in a note.</p>{% endif %}
+    {{ photo_grid(photos) }}
+  </div>
+  <div class="tl-col"><h2 style="margin-top:0">Timeline</h2>{{ entry_list(timeline, filter="other") }}</div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if chart.points %}<script>grazr.onHandChart(document.getElementById("onhand"));</script>{% endif %}
+<script>
+// the herd picker only matters for feeding; stopping needs no amount
+(() => {
+  const kind = document.querySelector("select[name=kind]"), herd = document.querySelector("[data-for=use]");
+  const amount = document.querySelector("[data-amount]"), qty = amount.querySelector("input");
+  const sync = () => {
+    herd.hidden = !["use", "rate", "stop"].includes(kind.value);
+    amount.hidden = kind.value === "stop"; qty.required = !amount.hidden;
+  };
+  kind.addEventListener("change", sync); sync();
+})();
+</script>
+{% endblock %}

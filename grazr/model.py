@@ -27,6 +27,7 @@ class Entity:
     anonymous: bool = False
     perimeter: list[tuple[float, float]] | None = None   # [(lat, lon), ...]
     warnings: list[Warning] = field(default_factory=list)
+    log: object = None        # parse.Note of the body's dated lines (index fills it)
 
 
 def _date(e: Entity, key: str):

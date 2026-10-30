@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_list, elink %}
+{% block body_attrs %} class="fill"{% endblock %}
 {% block title %}#{{ tag }}{% endblock %}
 {% block main %}
 <div class="titlebar"><h1>#{{ tag }}</h1><span class="muted">{{ entries|length }} entries</span></div>
@@ -7,6 +8,6 @@
   <div><h2 style="margin-top:0">Mentioned</h2>
     {% if mentioned %}<table>{% for m in mentioned %}<tr><td>{{ elink(m.id) }}</td><td class="muted small">{{ m.type }}</td><td>{{ m.n }}</td></tr>{% endfor %}</table>
     {% else %}<p class="muted">No entities mentioned.</p>{% endif %}</div>
-  <div><h2 style="margin-top:0">Entries</h2>{{ entry_list(entries) }}</div>
+  <div class="tl-col"><h2 style="margin-top:0">Entries</h2>{{ entry_list(entries) }}</div>
 </div>
 {% endblock %}

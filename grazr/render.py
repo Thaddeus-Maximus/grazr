@@ -70,10 +70,9 @@ class Renderer:
         if url is None:
             return f'<span class="link {cls}" title="unresolved">{escape(label)}</span>'
         title = ""
-        if tag:   # (number, id): a tagged animal shows just its number unless aliased
+        if tag:   # (text, id): an animal's ear tag shows just its number (or name), even if aliased
             title = f' title="{escape(tag[1])}"'
-            if label == target:
-                label = tag[0]
+            label = tag[0]
         return f'<a class="link {cls}" href="{escape(url)}"{title}>{escape(label)}</a>'
 
     def document(self, text: str) -> Markup:

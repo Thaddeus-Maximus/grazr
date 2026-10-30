@@ -45,3 +45,7 @@
 {% macro span(start, end) %}{{ start|ts }} → {% if end %}{{ end|ts }}{% else %}<b>now</b>{% endif %}{% endmacro %}
 
 {% macro source(path, line) %}<a class="src" href="/n/{{ path|q }}#L{{ line }}">{{ path }}:{{ line }}</a>{% endmacro %}
+
+{# Moves the file to .trash/ (Obsidian's trash), after asking. #}
+{% macro delete_form(path) %}<form id="delete" method="post" action="/delete/{{ path|q }}" hidden
+  data-confirm="Delete {{ path }}? It goes to the .trash folder, so it can be got back. Links to it will stop working."></form>{% endmacro %}

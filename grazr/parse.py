@@ -85,6 +85,7 @@ class Entry:
     head: Head | None = None
     exit: Exit | None = None
     parent_line: int | None = None
+    context: str = ""                                       # the parent items' text
     bare: list[tuple[int, int, str]] = field(default_factory=list)  # unlinked IDs
 
 
@@ -303,6 +304,7 @@ def parse_note(path: str, text: str, animal_ids: AnimalIds | None = None,
         if parent is not None:
             e.parent_line = parent.line
             e.inherited = [l for l in parent.links + parent.inherited if l not in e.links]
+            e.context = parent.text + "\n" + parent.context
         if animal_ids is not None:
             masked = _mask(_mask(_mask(_mask(content, EMBED), LINK), CODE), URL)
             e.bare = list(animal_ids.find_bare(masked))

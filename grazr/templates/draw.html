@@ -11,15 +11,19 @@
   (suggested <b>{{ suggestion }}</b>) with the same properties (§4.3).</div>
 {% endif %}
 <form method="post" action="/draw" id="drawform">
-<div class="cols">
+<div class="cols draw-cols">
   <div>
-    <p class="muted small">Instructions are on the map. Other paddocks show as dashed outlines; corners snap
-      to them, but only this paddock can be changed.</p>
-    <div class="row" style="margin-bottom:.5rem">
+    <p class="muted small wide-only">Keys and mouse actions are listed under the map. Other paddocks show as dashed outlines; corners snap
+      to them (and to the grid: press <kbd>G</kbd>), but only this paddock can be changed.</p>
+    <p class="muted small phone-only">Tap the map for each corner, or stand on a corner and tap <b>Corner here</b> to use GPS.
+      Corners snap to the other paddocks (dashed).</p>
+    <div class="row draw-buttons" style="margin-bottom:.5rem">
+      <button type="button" id="gps" hidden title="Place a corner where you're standing (GPS)">Corner here</button>
       <button type="button" id="undo">Undo corner</button>
       <button type="button" id="finish">Finish shape</button>
       <button type="button" id="restart">Start over</button>
     </div>
+    <div id="gps-status" class="phone-only small"></div>
     <label for="name">Name</label>
     <input id="name" name="name" required value="{{ suggestion if grazed else (e.id if e else '') }}">
     {% if grazed %}<input type="hidden" name="copy_from" value="{{ e.id }}">{% endif %}
@@ -30,7 +34,7 @@
     <div class="row" style="margin-top:1rem"><button class="primary">Save paddock</button>
       {% if e %}<a href="{{ e.id|eurl }}">Cancel</a>{% endif %}</div>
   </div>
-  <div><div id="map" class="map" data-config='{{ app.map_config()|tojson }}'></div></div>
+  <div class="draw-map"><div id="map" class="map" data-config='{{ app.map_config()|tojson }}'></div></div>
 </div>
 </form>
 {% endblock %}
@@ -45,7 +49,7 @@
   const existing = {{ (e.polygon if e and e.polygon else "null")|safe }};
   const btn = (id) => document.getElementById(id);
   grazr.drawMap(btn("map"), btn("perimeter"), existing, others,
-                {undo: btn("undo"), finish: btn("finish"), restart: btn("restart")});
+                {undo: btn("undo"), finish: btn("finish"), restart: btn("restart"), gps: btn("gps"), status: btn("gps-status")});
   document.getElementById("drawform").addEventListener("submit", (ev) => {
     if (!document.getElementById("perimeter").value) { ev.preventDefault(); alert("Draw the paddock on the map first."); }
   });

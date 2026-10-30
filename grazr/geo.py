@@ -43,6 +43,12 @@ def acres(p: Polygon) -> float:
     return abs(area) / SQM_PER_ACRE
 
 
+def perimeter_feet(perimeter: list) -> float:
+    """Fence length around a `[[lat, lon], ...]` perimeter, in feet."""
+    lats, lons = [p[0] for p in perimeter], [p[1] for p in perimeter]
+    return GEOD.line_length(lons + lons[:1], lats + lats[:1]) / 0.3048
+
+
 @dataclass
 class Face:
     geom: Polygon

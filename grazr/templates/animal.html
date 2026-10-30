@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source %}
+{% block body_attrs %} class="fill"{% endblock %}
 {% block title %}{{ e.id }}{% endblock %}
 {% macro ped(node, label) %}
 {% if node %}
@@ -18,6 +19,7 @@
   {% elif left %}<span class="badge left">left {{ "(date unknown)" if e.left_on == "unknown" else e.left_on }}</span>{% endif %}
   {% if f.status %}<span class="badge">{{ f.status }}</span>{% endif %}
   <div class="actions">
+    <span class="pager" data-pager="{{ pager|tojson|forceescape }}" title="← / → keys"></span>
     <a class="btn" href="/new?text={{ ('[[' ~ e.id ~ ']] ')|q }}">+ Note</a>
     <a class="btn" href="/edit/{{ e.id|q }}">Edit properties</a>
     <a class="btn" href="/n/{{ e.path|q }}?edit=1">Edit file</a>
@@ -29,6 +31,7 @@
       {% if membership %}
       <p>In {{ elink(membership.herd) }} since {{ membership.start|ts }}{% if membership.inherited %} <span class="badge via">with dam</span>{% endif %}
       {% if paddocks %} · on {% for o in paddocks %}{{ elink(o.paddock) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+      {% elif pedigree_only %}<p class="muted">Pedigree only: not on this farm, known through its offspring.</p>
       {% elif not left %}<p class="muted">Not in any herd. Tick it in the <a href="/animals">animals list</a> to move it, or write <code>[[{{ e.id }}]] -> [[Herd]]</code>.</p>{% endif %}
       {% if exit %}<p><b>{{ exit.kind|capitalize }}</b> {{ exit.ts|ts }}
         {%- if exit.weight %} · {{ "%g"|format(exit.weight) }} {{ exit.unit }}{% if exit.basis %} {{ exit.basis }}{% endif %}{% endif %}
@@ -73,7 +76,7 @@
     {% else %}<p class="muted">No herd moves.</p>{% endif %}
     {{ photo_grid(photos) }}
   </div>
-  <div>
+  <div class="tl-col">
     <h2 style="margin-top:0">Timeline</h2>
     {{ entry_list(timeline, filter="herd entries") }}
   </div>

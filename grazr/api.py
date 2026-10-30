@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import geo, migrate
@@ -20,6 +20,13 @@ def gone(row, today: str | None = None) -> bool:
     """Has this animal left (dated, or `left: unknown`)?"""
     left = row["left_on"]
     return bool(left) and (left == UNKNOWN or left <= (today or datetime.now().date().isoformat()))
+
+
+def pedigree_only(row) -> bool:
+    """An animal known only through its offspring's pedigree (`pedigree_only: true`):
+    never on this farm, so kept out of the animal list but still linked as dam/sire."""
+    v = fields(row).get("pedigree_only")
+    return v is True or (isinstance(v, str) and v.strip().lower() in ("true", "yes", "1"))
 
 
 def fields(row) -> dict:
@@ -43,7 +50,7 @@ class Farm:
         ix = self.index
         if getattr(self, "_resolver_gen", None) != ix.generation:
             ents = {r["id"]: r["type"] for r in self.db.execute("SELECT id, type FROM entities")}
-            self._resolver = Resolver(ix.animal_ids, ents, dict.fromkeys(ix.cache))
+            self._resolver = Resolver(ix.animal_ids, ents, dict.fromkeys(ix.cache), getattr(ix, "aliases", {}))
             self._resolver_gen = ix.generation
         return self._resolver
 
@@ -209,6 +216,105 @@ class Farm:
             sql += " AND paddock = ?"
             args.append(paddock)
         return self.q(sql + " ORDER BY start", *args)
+
+    # --- feed (§6.6) ----------------------------------------------------------
+    RATE_DAYS = 14   # "per day" is the average use over this many days (or since feeding began)
+
+    def feed_ledger(self, feed: str, now: datetime | None = None) -> list[dict]:
+        """A feed's events in time order, each with the amount on hand after it (None
+        until a count or purchase says how much there was). Undated events come last
+        and don't move the balance.
+
+        A standing rate (`1 bucket per day`) is a feeding once a day, at the time it was
+        written, from then until `now`, another rate for the same herds, or a `stopped`
+        line (one without herds stops them all). Those feedings are `daily` rows."""
+        now = now or datetime.now()
+        rows = [dict(r, herds=json.loads(r["herds"])) for r in
+                self.q("SELECT * FROM feed_events WHERE feed=? ORDER BY ts IS NULL, ts, path, line", feed)]
+        dated, undated = [r for r in rows if r["ts"]], [r for r in rows if not r["ts"]]
+        events, active = [], {}            # herds → the rate row running for them
+
+        def run(rate, end, last=False):    # its daily feedings up to `end`
+            t = datetime.strptime(rate["ts"], TS)
+            while t < end or (last and t <= end):
+                events.append({**rate, "kind": "use", "ts": t.strftime(TS), "daily": True})
+                t += timedelta(days=1)
+
+        for r in dated:
+            events.append(r)
+            if r["kind"] not in ("rate", "stop"):
+                continue
+            key, at = tuple(sorted(r["herds"])), datetime.strptime(r["ts"], TS)
+            ends = [k for k in active if k == key or (r["kind"] == "stop" and (not key or set(k) & set(key)))]
+            for k in ends:
+                run(active.pop(k), at)
+            if r["kind"] == "rate" and r["lb"] > 0:
+                active[key] = r
+        for rate in active.values():
+            rate["active"] = True
+            run(rate, now, last=True)
+        events.sort(key=lambda e: (e["ts"], e["kind"] == "use" and e.get("daily", False)))
+        on_hand, out = None, []
+        for e in events + undated:
+            if e["ts"]:
+                if e["kind"] == "count":
+                    on_hand = e["lb"]
+                elif e["kind"] == "buy":
+                    on_hand = (on_hand or 0) + e["lb"]
+                elif e["kind"] == "use" and on_hand is not None:
+                    on_hand -= e["lb"]
+            out.append({**e, "on_hand": on_hand})
+        return out
+
+    @staticmethod
+    def feed_ledger_rows(ledger: list[dict]) -> list[dict]:
+        """The ledger for reading: a rate's run of daily feedings is one row (`days`,
+        `until`, total `lb`)."""
+        out: list[dict] = []
+        for e in ledger:
+            p = out[-1] if out else None
+            if e.get("daily") and p and p.get("daily") and (p["path"], p["line"]) == (e["path"], e["line"]):
+                p.update(days=p["days"] + 1, until=e["ts"], lb=p["lb"] + e["lb"], on_hand=e["on_hand"])
+            else:
+                out.append({**e, "days": 1, "until": e["ts"]} if e.get("daily") else dict(e))
+        return out
+
+    def feed_status(self, feed: str, now: datetime | None = None, ledger=None) -> dict:
+        """On hand now, use in the last 30 days, pounds per day (the standing rates if
+        any, else the recent average), and days left at that rate."""
+        now = now or datetime.now()
+        ledger = self.feed_ledger(feed, now) if ledger is None else ledger
+        dated = [e for e in ledger if e["ts"]]
+        on_hand = dated[-1]["on_hand"] if dated else None
+        uses = [(datetime.strptime(e["ts"], TS), e["lb"]) for e in dated if e["kind"] == "use"]
+        used_30 = sum(lb for t, lb in uses if t >= now - timedelta(days=30))
+        recent = [(t, lb) for t, lb in uses if t >= now - timedelta(days=self.RATE_DAYS)]
+        rates = [e for e in dated if e["kind"] == "rate" and e.get("active")]
+        per_day = None
+        if rates:
+            per_day = sum(e["lb"] for e in rates)
+        elif recent:
+            days = min(self.RATE_DAYS, max(1, (now.date() - min(t for t, _ in recent).date()).days + 1))
+            per_day = sum(lb for _, lb in recent) / days
+        counts = [e for e in dated if e["kind"] == "count"]
+        return {"on_hand": on_hand, "used_30": used_30, "per_day": per_day, "rates": rates,
+                "days_left": max(0.0, on_hand / per_day) if on_hand is not None and per_day else None,
+                "counted": counts[-1]["ts"] if counts else None,
+                "last_use": uses[-1][0].strftime(TS) if uses else None}
+
+    def herd_feed(self, herd: str, days: int = 30, now: datetime | None = None) -> list[dict]:
+        """Pounds of each feed a herd ate in the last `days` (shared evenly when one
+        entry feeds several herds)."""
+        now = now or datetime.now()
+        since = (now - timedelta(days=days)).strftime(TS)
+        tot: dict[str, list] = {}
+        for (feed,) in self.q("SELECT DISTINCT feed FROM feed_events"):
+            for e in self.feed_ledger(feed, now):
+                if e["kind"] == "use" and e["ts"] and e["ts"] >= since and herd in e["herds"]:
+                    t = tot.setdefault(feed, [0.0, 0])
+                    t[0] += e["lb"] / len(e["herds"])
+                    t[1] += 1
+        return [{"feed": k, "lb": v[0], "times": v[1]} for k, v in sorted(tot.items(), key=lambda kv: -kv[1][0])]
 
     def herd_size(self, herd_row, at: datetime | None = None) -> int | None:
         if herd_row["anonymous"]:
