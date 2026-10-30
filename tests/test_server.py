@@ -436,3 +436,24 @@ def test_phone_bits(web):
     assert 'class="tabbar"' in page and 'rel="manifest"' in page
     assert 'data-insert-for="text"' in web("/new")[2]
     assert 'id="gps"' in web("/draw")[2]       # GPS corners; app.js adds the location dot to every map
+
+
+def test_backup_export_and_import(web, farm_root):
+    status, headers, _ = web("/backup")
+    assert status == 200
+    status, headers, _ = web("/backup/grazr-2026-10-30.zip")
+    assert status == 200 and headers["Content-Type"] == "application/zip"
+    assert "attachment" in headers["Content-Disposition"]
+    from grazr import archive
+    data = archive.export_bytes(farm_root)
+    (farm_root / "notes" / "2026Oct12-0707.md").write_text("changed", encoding="utf-8")
+    boundary = "XyZ"
+    body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"replace\"\r\n\r\n1\r\n"
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"b.zip\"\r\n"
+            f"Content-Type: application/zip\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
+    status, _, page = web("/backup/import", raw=body, ctype=f"multipart/form-data; boundary={boundary}")
+    assert status == 200 and "Imported" in page, page[:2000]
+    assert (farm_root / "notes" / "2026Oct12-0707.md").read_text(encoding="utf-8") != "changed"
+    status, _, page = web("/backup/import", raw=body.replace(data, b"junk"),
+                          ctype=f"multipart/form-data; boundary={boundary}")
+    assert status == 400 and "not a zip" in page

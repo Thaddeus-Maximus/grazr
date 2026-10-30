@@ -21,6 +21,8 @@ grazr server                   # http://127.0.0.1:8714
 | `grazr migrate [paths] [--apply]` | One-time: link bare IDs like `e010` in old notes |
 | `grazr tiles [--zoom 13-19]` | Download missing imagery around the paddocks (the server does this too) |
 | `grazr geojson [-o file]` | Export paddocks for GIS |
+| `grazr export [-o file.zip]` | Back up all the data to a .zip (also on the Backup page) |
+| `grazr import file.zip [--replace]` | Restore a backup; files it replaces go to `.trash/import-<time>/` |
 
 `fix` and `migrate` print a diff until you pass `--apply`. grazr never commits.
 

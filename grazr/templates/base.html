@@ -21,6 +21,7 @@
     <a href="/new">+ Note</a>
     <a href="/move">Move</a>
     <a href="/lint">Lint{% set n = app.warning_count() %}{% if n %} <span class="lintcount">{{ n }}</span>{% endif %}</a>
+    <a href="/backup">Backup</a>
   </nav>
   <form action="/search"><input type="search" name="q" placeholder="Search or jump to…" value="{{ q|default('') }}"></form>
 </header>
@@ -39,6 +40,7 @@
       <a href="/move" data-match="/move">Move a herd</a>
       <a href="/lint" data-match="/lint">Lint{% if n %} <span class="lintcount">{{ n }}</span>{% endif %}</a>
       <a href="/draw" data-match="/draw">Draw paddock</a>
+      <a href="/backup" data-match="/backup">Backup</a>
     </div>
   </details>
 </nav>

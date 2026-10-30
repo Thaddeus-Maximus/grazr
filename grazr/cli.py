@@ -69,6 +69,30 @@ def cmd_geojson(args):
     return 0
 
 
+def cmd_export(args):
+    from datetime import datetime
+    from . import archive
+    root = data_root(args.root)
+    out = Path(args.output or f"grazr-{datetime.now():%Y-%m-%d}.zip").resolve()
+    n = archive.export(root, out)
+    print(f"wrote {n} files to {out}")
+    return 0
+
+
+def cmd_import(args):
+    from . import archive
+    root = data_root(args.root)
+    try:
+        got = archive.import_(root, args.zip, replace=args.replace)
+    except archive.ArchiveError as e:
+        print(f"grazr: {e}", file=sys.stderr)
+        return 1
+    print(f"imported {got['written']} files")
+    if got["trash"]:
+        print(f"moved {got['trashed']} replaced file(s) to {got['trash']}")
+    return 0
+
+
 def cmd_server(args):
     from .server import run
     run(data_root(args.root), host=args.host, port=args.port, fetch_tiles=not args.no_tiles)
@@ -130,6 +154,15 @@ def main(argv=None):
     p = sub.add_parser("geojson", help="export paddocks as a GeoJSON FeatureCollection")
     p.add_argument("-o", "--output")
     p.set_defaults(fn=cmd_geojson)
+
+    p = sub.add_parser("export", help="back up all the data to a .zip")
+    p.add_argument("-o", "--output", help="default: grazr-<date>.zip")
+    p.set_defaults(fn=cmd_export)
+    p = sub.add_parser("import", help="restore a .zip made by export (replaced files go to .trash/)")
+    p.add_argument("zip")
+    p.add_argument("--replace", action="store_true",
+                   help="also move files the zip doesn't have to .trash/, so the folder matches it")
+    p.set_defaults(fn=cmd_import)
 
     args = ap.parse_args(argv)
     return args.fn(args)

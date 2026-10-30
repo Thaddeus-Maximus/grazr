@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Backup{% endblock %}
+{% block main %}
+<div class="titlebar"><h1>Backup</h1></div>
+{% if result %}
+<p class="flash">Imported {{ result.written }} files.{% if result.trash %} {{ result.trashed }} file(s) it replaced were moved to <code>{{ result.trash }}</code>.{% endif %}</p>
+{% endif %}
+<h2>Export</h2>
+<p>Every file in the data folder ({{ count }} files: notes, items, attachments and <code>grazr.yaml</code>) as one .zip.
+The index and map imagery aren't included; they're rebuilt.</p>
+<p><a class="btn primary" href="/backup/{{ filename }}" download>Download {{ filename }}</a></p>
+<h2>Import</h2>
+<p>Restore a .zip made by Export. Files in it overwrite files with the same name; the old copies go to
+<code>.trash/</code>, so nothing is lost.</p>
+<form method="post" action="/backup/import" enctype="multipart/form-data"
+  data-confirm="Import this zip? Files it replaces go to the .trash folder.">
+  <p><input type="file" name="file" accept=".zip,application/zip" required></p>
+  <p><label><input type="checkbox" name="replace" value="1"> Also move files the zip doesn't have to <code>.trash/</code>, so the folder matches the zip exactly</label></p>
+  <p><button class="primary">Import</button></p>
+</form>
+{% endblock %}

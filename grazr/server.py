@@ -1,6 +1,7 @@
 """`grazr server`: stdlib HTTP server + Jinja2 templates (spec §8)."""
 from __future__ import annotations
 
+import io
 import json
 import mimetypes
 import re
@@ -16,7 +17,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from . import feed as feed_mod
-from . import frontmatter, geo, tiles, writes
+from . import archive, frontmatter, geo, tiles, writes
 from .api import Farm, fields, fix_json, gone, parse_ts, pedigree_only
 from .dates import Stamp, parse_when
 from .index import TS
@@ -27,6 +28,7 @@ STATIC = Path(__file__).parent / "static"
 TYPE_PREFIX = {"animals": "a", "herds": "h", "paddocks": "p", "feeds": "f"}
 PREFIX_TYPE = {v: k for k, v in TYPE_PREFIX.items()}
 MAX_UPLOAD = 40 * 1024 * 1024
+MAX_IMPORT = 2 * 1024 * 1024 * 1024
 
 
 class Redirect(Exception):
@@ -247,6 +249,9 @@ class App:
         ("POST", r"/draw", "draw_save"),
         ("POST", r"/upload", "upload"),
         ("GET", r"/img", "img"),
+        ("GET", r"/backup", "backup"),
+        ("GET", r"/backup/(?P<name>[^/]+\.zip)", "export"),
+        ("POST", r"/backup/import", "import"),
         ("GET", r"/api/map", "api_map"),
         ("GET", r"/api/complete", "api_complete"),
         ("POST", r"/api/rename", "api_rename"),
@@ -671,6 +676,25 @@ class App:
         name = writes.save_upload(self.farm.root, filename, data)
         return ("application/json", json.dumps({"name": name, "embed": f"![[{name}]]"}).encode())
 
+    def r_backup(self, result=None, **_):
+        return self.page("backup.html", count=sum(1 for _ in archive.data_files(self.farm.root)),
+                         filename=f"grazr-{datetime.now():%Y-%m-%d}.zip", result=result)
+
+    def r_export(self, name, **_):
+        return ("application/zip", archive.export_bytes(self.farm.root),
+                {"Content-Disposition": f'attachment; filename="{name}"'})
+
+    def r_import(self, form, files, **_):
+        if "file" not in files or not files["file"][1]:
+            raise WriteError("no file")
+        try:
+            got = archive.import_(self.farm.root, io.BytesIO(files["file"][1]),
+                                  replace=form.get("replace") == "1")
+        except archive.ArchiveError as e:
+            raise WriteError(str(e))
+        self.farm.index.refresh(force=True)
+        return self.r_backup(result=got)
+
     def r_img(self, query, **_):
         name = query.get("name", "")
         ix = self.farm.index
@@ -837,7 +861,7 @@ def make_handler(app: App, port: int):
                     if not self._same_origin():
                         return self._send(403, b"cross-site request refused", "text/plain")
                     n = int(self.headers.get("Content-Length") or 0)
-                    if n > MAX_UPLOAD:
+                    if n > (MAX_IMPORT if path == "/backup/import" else MAX_UPLOAD):
                         return self._send(413, b"too large", "text/plain")
                     body = self.rfile.read(n)
                     ctype = self.headers.get("Content-Type", "")
@@ -850,7 +874,7 @@ def make_handler(app: App, port: int):
                 if isinstance(out, tuple) and out[0] == "file":
                     return self._file(out[1])
                 if isinstance(out, tuple):
-                    return self._send(200, out[1], out[0])
+                    return self._send(200, out[1], out[0], out[2] if len(out) > 2 else None)
                 return self._send(200, out.encode("utf-8"))
             except Redirect as r:
                 self._send(303, b"", headers={"Location": r.url})
