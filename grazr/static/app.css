@@ -293,3 +293,21 @@ th.sortable.desc::after { content: " \25BC"; }
 .when-pick { display: inline-flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
 .when-pick .chips { margin: 0; }
 .when-pick input[type=date] { min-width: 9.5rem; }
+
+/* breed mix: one bar, a segment per breed (Farm.breed_colors picks the number) */
+.breed { margin: .4rem 0 .8rem; }
+.breedbar { display: flex; height: 1.4rem; border-radius: 4px; overflow: hidden; margin-top: .2rem;
+  background: var(--chip); }
+.breedbar span { display: flex; align-items: center; justify-content: center; min-width: 0; overflow: hidden;
+  color: #fff; font-size: .8rem; font-weight: 600; white-space: nowrap; }
+.breedbar span + span { border-left: 1px solid #fff; }
+.breedbar.small { height: .8rem; width: 8rem; margin: 0; }
+.breedlegend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; margin-top: .3rem; }
+.breedlegend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; margin-right: .3rem;
+  vertical-align: -.1rem; }
+.bc-0 { background: #2f6b3a; } .bc-1 { background: #c0782b; } .bc-2 { background: #3b6ea8; }
+.bc-3 { background: #8e4b8a; } .bc-4 { background: #b8433a; } .bc-5 { background: #3f8a84; }
+.bc-6 { background: #8a7a2e; } .bc-7 { background: #5b5b9e; } .bc-8 { background: #a05a2c; }
+.bc-9 { background: #4f7d2f; }
+.bc-u { background: repeating-linear-gradient(45deg, #b9b9b9 0 4px, #d6d6d6 4px 8px); }
+.breedbar .bc-u { color: #333; }

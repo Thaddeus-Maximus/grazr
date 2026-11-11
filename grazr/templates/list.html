@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import elink, when_input %}
+{% from "_macros.html" import elink, when_input, breed_bar %}
 {% block title %}{{ etype|capitalize }}{% endblock %}
 {% block main %}
 <div class="titlebar">
@@ -69,8 +69,11 @@
     {% elif etype == "paddocks" %}<td data-sort="{{ r.acres if r.acres is not none else '' }}">{{ r.acres|acres }}</td><td>{{ r|fence }}</td>
       <td data-sort="{{ x.rest if r.acres and x.rest is not none else '' }}">{{ x.rest|days if r.acres else "" }}</td>
       <td>{% for h in x.herds %}{{ elink(h) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>{% endif %}
-    {% for c in cols %}{% set v = f.get(c) %}<td{% if c == "born" and r.born %} data-sort="{{ r.born }}"{% endif %}>
-      {%- if v is string %}{{ v|inline }}{% elif v is not none %}{{ v }}{% endif %}</td>{% endfor %}
+    {% for c in cols %}{% set v = f.get(c) %}
+    {% if c == "breed" and etype == "animals" %}{% set b = x.breed %}
+    <td data-sort="{{ b.mix[0][0] or '' if b else '' }}">{% if b %}{{ breed_bar(b.mix, breed_colors, small=True) }}{% endif %}</td>
+    {% else %}<td{% if c == "born" and r.born %} data-sort="{{ r.born }}"{% endif %}>
+      {%- if v is string %}{{ v|inline }}{% elif v is not none %}{{ v }}{% endif %}</td>{% endif %}{% endfor %}
   </tr>
   {% endfor %}
   </tbody>

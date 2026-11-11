@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from . import breed as breed_mod
 from . import geo, migrate
 from .ids import Resolver
 from .index import TS, UNKNOWN, Index
@@ -328,6 +329,50 @@ class Farm:
             node["dam"] = self.pedigree(row["dam"], depth - 1)
             node["sire"] = self.pedigree(row["sire"], depth - 1)
         return node
+
+    BREED_DEPTH = 12     # generations to look back for a breed
+
+    def breed(self, eid: str | None) -> dict | None:
+        """An animal's breed mix: its own `breed:`, or else half its dam's and half its
+        sire's, back through the pedigree. A parent with neither is unknown for its half.
+        → {"mix": [(name or None for unknown, share)], "own": written on the animal},
+        or None when nothing at all is known."""
+        ix = self.index
+        if getattr(self, "_breed_gen", None) != ix.generation:
+            self._breeds, self._breed_gen = {}, ix.generation
+        memo = self._breeds
+
+        def mix(i, depth, seen):
+            if not i or depth > self.BREED_DEPTH or i in seen:
+                return None
+            if i in memo:
+                return memo[i]
+            row = self.entity(i)
+            if row is None:
+                return None
+            own = breed_mod.parse(fields(row).get("breed"))
+            if own:
+                got = {"mix": own, "own": True}
+            else:
+                halves = [mix(p, depth + 1, seen | {i}) for p in (row["dam"], row["sire"])]
+                got = None
+                if any(halves):
+                    got = {"mix": breed_mod.combine([(n, s / 2) for h in halves for n, s in
+                                                     (h["mix"] if h else [(None, 1.0)])]), "own": False}
+            if not seen:          # only whole answers, not ones cut short by the cycle guard
+                memo[i] = got
+            return got
+
+        return mix(eid, 0, frozenset())
+
+    def breed_colors(self) -> dict[str, int]:
+        """Every breed named on the farm (by key) → its colour number, alphabetical, so a
+        breed is the same colour on every page."""
+        names = set()
+        for r in self.entities("animals"):
+            for n, _ in breed_mod.parse(fields(r).get("breed")) or []:
+                names.add(breed_mod.key(n))
+        return {k: i for i, k in enumerate(sorted(names))}
 
     def exit(self, eid: str):
         """How and when an animal left (`[[x]] slaughtered 66 lb hanging`), if recorded."""

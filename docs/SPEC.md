@@ -133,6 +133,15 @@ derived depends on it.
 | paddock | `perimeter` | geometry, area, rest days |
 | paddock | `parent` | containment; parents draw as outlines (§6.3) |
 
+`breed` is free text that grazr also reads as a mix, for the breed bar on an
+animal's page and the animal list's `breed` column: shares separated by `,` `;`
+or `+`, each a breed with an amount (`1/4`, `25%`, `0.25`, `half`), e.g.
+`breed: 1/4 Dorper, 1/4 Katahdin, 1/2 St. Croix`. Breeds without an amount split
+what's left (`Dorper` alone is 100%), and the shares are scaled to add up to 1.
+Breeds match without case or dots (`St Croix` is `St. Croix`). An animal with no
+`breed` is half its dam's mix and half its sire's, back through the pedigree; a
+parent with no breed known is "unknown" for its half.
+
 Everything else is free: `species`, `sex`, `breed`, `name`, `color`, `coat`,
 `source`, `status`, `cull`, `forage`, `kind`, `water`, or anything you invent
 later. Free fields appear on the entity's page, are searchable, and can filter

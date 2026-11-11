@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source %}
+{% from "_macros.html" import entry_list, prop_list, photo_grid, elink, span, source, breed_bar %}
 {% block body_attrs %} class="fill"{% endblock %}
 {% block title %}{{ e.id }}{% endblock %}
 {% macro ped(node, label) %}
@@ -12,6 +12,7 @@
 {% endmacro %}
 {% block main %}
 {% set f = props %}
+{% set shown = dict(props) %}{% if breed and breed.own %}{% do shown.pop("breed") %}{% endif %}
 <div class="titlebar">
   <h1>{{ e.id }}</h1>
   {% if f.name %}<span class="muted">{{ f.name }}</span>{% endif %}
@@ -38,7 +39,11 @@
         {%- if exit.cause %} · {{ exit.cause|inline }}{% endif %}
         <a class="src" href="/n/{{ exit.path|q }}#L{{ exit.line }}">source</a></p>{% endif %}
       {% if e.born %}<p>Born {{ e.born }}{% if e.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet", 4: "quad"}.get(e.birth_type, e.birth_type ~ "-birth") }}{% endif %}</p>{% endif %}
-      {{ prop_list(f) }}
+      {% if breed %}
+      <div class="breed"><span class="muted small">Breed{% if not breed.own %}, from dam and sire{% endif %}</span>
+        {{ breed_bar(breed.mix, breed_colors) }}</div>
+      {% endif %}
+      {{ prop_list(shown) }}
       {% if body %}<div class="note" style="margin-top:.8rem">{{ body }}</div>{% endif %}
     </div>
 

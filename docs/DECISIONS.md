@@ -24,3 +24,4 @@ Numbers match `QUESTIONS.md` (D-n ↔ Qn, D-Rn ↔ Rn). Decided 2026-10-12.
 - **D-R3** No ODS importer. Animal files are created by hand.
 - **D-R4** `migrate` doesn't rewrite bare numbers like `#117`.
 - **D-22** (2026-11-11) A grazed paddock can be redrawn in place, after a warning and a confirm; its whole history then uses the new outline. A moved fence should still be a new paddock (Q100), but correcting a badly drawn outline shouldn't need a new name.
+- **D-23** (2026-11-11) `breed` is read as a mix of shares (`1/4 Dorper, 1/2 St. Croix`), and an animal without one inherits half from each parent. A breed written on the animal wins over its parents'. It stays free text otherwise, not a structural field.

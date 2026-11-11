@@ -51,13 +51,13 @@ class App:
         self.lock = farm.index.lock
         self.env = Environment(loader=PackageLoader("grazr", "templates"),
                                autoescape=select_autoescape(["html"]), trim_blocks=True,
-                               lstrip_blocks=True)
+                               lstrip_blocks=True, extensions=["jinja2.ext.do"])
         self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, pedigree_only=pedigree_only,
-                                static=self.static_url)
+                                static=self.static_url, breed_class=self.breed_class)
         self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype, elabel=self.elabel,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
-                                fence=self.fence, lb=self.fmt_lb,
+                                fence=self.fence, lb=self.fmt_lb, pct=self.fmt_pct,
                                 q=lambda s: quote(str(s)))
 
     # --- helpers used by templates -------------------------------------------
@@ -102,6 +102,20 @@ class App:
             n = v / w
             out += f" ({n:.1f}".rstrip("0").rstrip(".") + f" {u}{'' if abs(n) == 1 else 's'})"
         return out
+
+    @staticmethod
+    def fmt_pct(share: float) -> str:
+        """A share as a percent: `25%`, `12.5%`, `6.25%`."""
+        return f"{round(share * 100, 2):g}%"
+
+    BREED_COLORS = 10     # .bc-0 … .bc-9 in app.css
+
+    @classmethod
+    def breed_class(cls, name, colors: dict) -> str:
+        if name is None:
+            return "bc-u"
+        from .breed import key
+        return f"bc-{colors.get(key(name), 0) % cls.BREED_COLORS}"
 
     @staticmethod
     def fence(row) -> str:
@@ -305,7 +319,8 @@ class App:
             pedigree=f.pedigree(row["id"], 4), lambing=f.lambing(row["id"]),
             offspring=f.offspring(row["id"]),
             history=f.q("SELECT * FROM memberships WHERE animal=? ORDER BY start DESC", row["id"]),
-            left=gone(row), exit=f.exit(row["id"]), pedigree_only=pedigree_only(row))
+            left=gone(row), exit=f.exit(row["id"]), pedigree_only=pedigree_only(row),
+            breed=f.breed(row["id"]), breed_colors=f.breed_colors())
 
     def r_herd(self, eid, **_):
         f = self.farm
@@ -443,7 +458,11 @@ class App:
             elif etype == "paddocks":
                 extra[r["id"]] = {"rest": rest["effective"].get(r["id"], rest["exact"].get(r["id"])),
                                   "herds": [o["herd"] for o in f.occupying(paddock=r["id"])]}
+        if etype == "animals" and "breed" in cols:
+            for r in out:
+                extra[r["id"]]["breed"] = f.breed(r["id"])
         return self.page("list.html", etype=etype, rows=out, cols=cols, extra=extra,
+                         breed_colors=f.breed_colors() if etype == "animals" else {},
                          all_fields=f.field_names(etype), query=query, filters=filters,
                          show_all=show_all, series=[s.name for s in f.config.series])
 
