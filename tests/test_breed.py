@@ -43,3 +43,8 @@ def test_breed_from_dam_and_sire(web, farm, farm_root):
     assert "from dam and sire" in page and 'class="breedbar"' in page and "unknown <b>50%</b>" in page
     page = web("/animals?cols=breed")[2]
     assert 'class="breedbar small"' in page and "St. Croix 25%" in page
+    # a default column, with a colour key naming the breeds in view
+    page = web("/animals")[2]
+    assert 'data-key="f:breed"' in page and 'class="breedbar small"' in page
+    key = page.split('class="breedlegend small"')[1].split("</div>")[0]
+    assert [k.split("</i>")[1].split("<")[0] for k in key.split("<i ")[1:]] == ["Dorper", "Katahdin", "St. Croix", "unknown"]

@@ -301,7 +301,8 @@ th.sortable.desc::after { content: " \25BC"; }
 .breedbar span { display: flex; align-items: center; justify-content: center; min-width: 0; overflow: hidden;
   color: #fff; font-size: .8rem; font-weight: 600; white-space: nowrap; }
 .breedbar span + span { border-left: 1px solid #fff; }
-.breedbar.small { height: .8rem; width: 8rem; margin: 0; }
+.breedbar.small { height: 1.1rem; width: 11rem; margin: 0; }
+.breedbar.small span { font-size: .7rem; font-weight: 500; }
 .breedlegend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; margin-top: .3rem; }
 .breedlegend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; margin-right: .3rem;
   vertical-align: -.1rem; }

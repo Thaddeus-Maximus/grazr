@@ -19,6 +19,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from . import feed as feed_mod
 from . import archive, frontmatter, geo, tiles, writes
 from .api import Farm, fields, fix_json, gone, parse_ts, pedigree_only
+from .breed import key
 from .dates import Stamp, parse_when
 from .index import TS
 from .render import Renderer
@@ -114,7 +115,6 @@ class App:
     def breed_class(cls, name, colors: dict) -> str:
         if name is None:
             return "bc-u"
-        from .breed import key
         return f"bc-{colors.get(key(name), 0) % cls.BREED_COLORS}"
 
     @staticmethod
@@ -439,11 +439,14 @@ class App:
                     break
             if ok:
                 out.append(r)
-        default_cols = {"animals": ["name", "sex", "born"], "herds": ["species"],
+        default_cols = {"animals": ["name", "sex", "born", "breed"], "herds": ["species"],
                         "paddocks": ["kind", "forage"]}.get(etype, [])
         # `cols` from the form, even empty (every column unticked); defaults otherwise
+        names = f.field_names(etype)
+        if etype == "animals" and "breed" not in names:     # can be inherited with no field set
+            names = sorted(names + ["breed"], key=str.casefold)
         cols = [c for c in query["cols"].split(",") if c] if "cols" in query else \
-            [c for c in default_cols if c in f.field_names(etype)]
+            [c for c in default_cols if c in names]
         rest = f.rest() if etype == "paddocks" else None
         extra = {}
         for r in out:
@@ -458,12 +461,20 @@ class App:
             elif etype == "paddocks":
                 extra[r["id"]] = {"rest": rest["effective"].get(r["id"], rest["exact"].get(r["id"])),
                                   "herds": [o["herd"] for o in f.occupying(paddock=r["id"])]}
+        breeds = []          # the breeds in view, for the colour key
         if etype == "animals" and "breed" in cols:
+            seen = set()
             for r in out:
-                extra[r["id"]]["breed"] = f.breed(r["id"])
+                b = extra[r["id"]]["breed"] = f.breed(r["id"])
+                for n, _ in (b["mix"] if b else []):
+                    k = key(n) if n else None
+                    if k not in seen:
+                        seen.add(k)
+                        breeds.append(n)
+            breeds.sort(key=lambda n: (n is None, key(n or "")))
         return self.page("list.html", etype=etype, rows=out, cols=cols, extra=extra,
-                         breed_colors=f.breed_colors() if etype == "animals" else {},
-                         all_fields=f.field_names(etype), query=query, filters=filters,
+                         breed_colors=f.breed_colors() if etype == "animals" else {}, breeds=breeds,
+                         all_fields=names, query=query, filters=filters,
                          show_all=show_all, series=[s.name for s in f.config.series])
 
     def r_tag(self, tag, **_):

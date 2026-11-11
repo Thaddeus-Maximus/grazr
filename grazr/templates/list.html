@@ -42,6 +42,9 @@
   {% endif %}
 </form>
 
+{% if breeds %}
+<div class="breedlegend small" style="margin:-.4rem 0 .6rem">{% for n in breeds %}<span><i class="{{ breed_class(n, breed_colors) }}"></i>{{ n or "unknown" }}</span>{% endfor %}</div>
+{% endif %}
 <form method="post" action="/move-animals">
 <input type="hidden" name="next" value="/animals">
 <table data-sortable>

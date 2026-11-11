@@ -67,7 +67,7 @@
 {% set label = [] %}{% for n, s in mix %}{% do label.append((n or "unknown") ~ " " ~ s|pct) %}{% endfor %}
 <div class="breedbar{{ ' small' if small }}" role="img" aria-label="{{ label|join(', ') }}" title="{{ label|join(', ') }}">
   {%- for n, s in mix %}<span class="{{ breed_class(n, colors) }}" style="width:{{ '%.3f'|format(s * 100) }}%">
-    {%- if not small and s >= 0.12 %}{{ s|pct }}{% endif %}</span>{% endfor -%}
+    {%- if s >= (0.3 if small else 0.12) %}{{ s|pct }}{% endif %}</span>{% endfor -%}
 </div>
 {% if not small %}
 <div class="breedlegend small">{% for n, s in mix %}<span><i class="{{ breed_class(n, colors) }}"></i>{{ n or "unknown" }} <b>{{ s|pct }}</b></span>{% endfor %}</div>
