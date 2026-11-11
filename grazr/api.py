@@ -218,8 +218,6 @@ class Farm:
         return self.q(sql + " ORDER BY start", *args)
 
     # --- feed (§6.6) ----------------------------------------------------------
-    RATE_DAYS = 14   # "per day" is the average use over this many days (or since feeding began)
-
     def feed_ledger(self, feed: str, now: datetime | None = None) -> list[dict]:
         """A feed's events in time order, each with the amount on hand after it (None
         until a count or purchase says how much there was). Undated events come last
@@ -280,22 +278,17 @@ class Farm:
         return out
 
     def feed_status(self, feed: str, now: datetime | None = None, ledger=None) -> dict:
-        """On hand now, use in the last 30 days, pounds per day (the standing rates if
-        any, else the recent average), and days left at that rate."""
+        """On hand now, use in the last 30 days, pounds per day (the standing daily rates
+        still running; None with none, since one-off feedings don't say what comes next),
+        and days left at that rate."""
         now = now or datetime.now()
         ledger = self.feed_ledger(feed, now) if ledger is None else ledger
         dated = [e for e in ledger if e["ts"]]
         on_hand = dated[-1]["on_hand"] if dated else None
         uses = [(datetime.strptime(e["ts"], TS), e["lb"]) for e in dated if e["kind"] == "use"]
         used_30 = sum(lb for t, lb in uses if t >= now - timedelta(days=30))
-        recent = [(t, lb) for t, lb in uses if t >= now - timedelta(days=self.RATE_DAYS)]
         rates = [e for e in dated if e["kind"] == "rate" and e.get("active")]
-        per_day = None
-        if rates:
-            per_day = sum(e["lb"] for e in rates)
-        elif recent:
-            days = min(self.RATE_DAYS, max(1, (now.date() - min(t for t, _ in recent).date()).days + 1))
-            per_day = sum(lb for _, lb in recent) / days
+        per_day = sum(e["lb"] for e in rates) if rates else None
         counts = [e for e in dated if e["kind"] == "count"]
         return {"on_hand": on_hand, "used_30": used_30, "per_day": per_day, "rates": rates,
                 "days_left": max(0.0, on_hand / per_day) if on_hand is not None and per_day else None,

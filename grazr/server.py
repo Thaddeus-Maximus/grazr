@@ -350,7 +350,7 @@ class App:
                  "points": [[x["ts"], x["on_hand"], x["kind"], x.get("daily", False)]
                             for x in ledger if x["ts"] and x["on_hand"] is not None]}
         return self.page("feed.html", **self._common(row), ledger=f.feed_ledger_rows(ledger), sizes=sizes,
-                         st=st, rate_days=f.RATE_DAYS, chart=chart,
+                         st=st, chart=chart,
                          by_herd=sorted(by_herd.items(), key=lambda kv: -kv[1]),
                          units=list(sizes) + ["lb"], herds=herds)
 
@@ -508,7 +508,20 @@ class App:
 
     # --- writes ---------------------------------------------------------------
     def _when(self, form) -> tuple[datetime | None, bool]:
-        """The form's `when` → (time or None for now, whether only the day is known)."""
+        """The form's time → (time or None for now, whether only the day is known).
+
+        The date picker sends `when_date` and `when_time`, either of which may be blank:
+        a date with no time takes the current time of day, a time with no date is today.
+        `when` is free text ("15 Dec 2025", "yesterday 6pm", a datetime-local value)."""
+        d, t = ((form.get(k) or "").strip() for k in ("when_date", "when_time"))
+        if d or t:
+            now = datetime.now()
+            try:
+                day = datetime.strptime(d, "%Y-%m-%d").date() if d else now.date()
+                tod = datetime.strptime(t[:5], "%H:%M").time() if t else now.time().replace(second=0, microsecond=0)
+            except ValueError:
+                raise WriteError(f"can't read the time {(d + ' ' + t).strip()!r}")
+            return datetime.combine(day, tod), False
         raw = (form.get("when") or "").strip()
         if not raw:
             return None, False
@@ -535,8 +548,12 @@ class App:
         f = self.farm
         chips = [h["id"] for h in f.entities("herds") if not f.idle(h)]
         chips += [r["id"] for r in f.entities("feeds")] if "feeds" in f.config.types else []
+        when_date = when_time = ""
+        if query.get("when"):       # `?when=` prefills the picker (free text, as a note line takes)
+            dt, approx = self._when({"when": query["when"]})
+            when_date, when_time = dt.strftime("%Y-%m-%d"), "" if approx else dt.strftime("%H:%M")
         return self.page("new_note.html", text=query.get("text", ""), tags=query.get("tags", ""),
-                         when=query.get("when", ""), chips=chips)
+                         when_date=when_date, when_time=when_time, chips=chips)
 
     def r_new_note_save(self, form, **_):
         text = form.get("text", "").strip()
@@ -635,7 +652,7 @@ class App:
         row = f.entity(eid) if eid else None
         grazed = bool(row and f.q1("SELECT 1 FROM occupancies WHERE paddock=?", row["id"]))
         suggestion = ""
-        if grazed:
+        if grazed:      # a name to keep the old shape under, if the new one is a new paddock
             base, n = row["id"], 98
             while f.entity(f"{base}{chr(n)}") is not None:
                 n += 1
@@ -654,8 +671,10 @@ class App:
         if row is not None:
             if row["type"] != "paddocks":
                 raise WriteError(f"{name} is already a {row['type'][:-1]}")
-            if f.q1("SELECT 1 FROM occupancies WHERE paddock=?", name):
-                raise WriteError(f"{name} has been grazed, so a new shape needs a new name (§4.3)")
+            # a grazed paddock can be redrawn too (its history then uses the new shape),
+            # but only from its own Edit shape, not by drawing a new one with its name
+            if form.get("editing") != row["id"]:
+                raise WriteError(f"there is already a paddock called {name}; open it and use Edit shape")
             frontmatter.update(f.root / row["path"], {"perimeter": perim})
         else:
             values = {"perimeter": perim}

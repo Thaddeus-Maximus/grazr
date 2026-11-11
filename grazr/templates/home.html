@@ -24,7 +24,7 @@
 {% endblock %}
 {% block scripts %}
 <script>
-grazr.restMap(document.getElementById("map")).then(({map, cfg, outlines}) => {
+grazr.restMap(document.getElementById("map"), {active: true}).then(({map, cfg, outlines}) => {
   grazr.measureTool(map, cfg, outlines, document.getElementById("measure"));
 });
 </script>

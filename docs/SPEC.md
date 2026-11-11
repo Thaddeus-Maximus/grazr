@@ -248,10 +248,12 @@ Prose about the paddock.
 ```
 
 - **A paddock is one exact polygon.** Temporary fence polygons get reused by
-  picking the same paddock again (Q38, Q39). If the shape changes, it is a new
-  paddock (Q100). The web UI's "edit shape" on a paddock that has ever been
-  grazed saves a new paddock (suggesting the name `P3b`). A paddock with no
-  occupancies can be edited in place.
+  picking the same paddock again (Q38, Q39). If the fence moves, the new shape
+  should be a new paddock (Q100), so the old grazing keeps the old outline. The
+  web UI's "edit shape" on a paddock that has been grazed warns about this and
+  suggests a new name (`P3b`), but saving under the same name is allowed: it
+  redraws the paddock in place, for all of its history (e.g. fixing a sloppy
+  outline). Drawing a new paddock can't take an existing paddock's name.
 - **Parents.** A paddock that other paddocks name as `parent` is a container,
   such as a perimeter-fenced field (Q102). That role comes from the links, not
   from a `kind` value. Herds may occupy a parent directly.
@@ -505,9 +507,10 @@ measures (bale, bucket, bag, sack, scoop, pail, flake, ...) or the feed's sizes,
 
 On hand is worked forward through the dated events: a count sets it, a purchase
 adds to it, use subtracts from it (before the first count or purchase it's
-unknown). **Per day** is the standing rates still running, or with none, the
-average use over the last 14 days (or since use began, if that's sooner); **days
-left** is on hand divided by that. The feed's page shows a rate's run of daily
+unknown). **Per day** is the standing daily rates still running. With none it's
+blank: one-off feedings don't say what comes next, so they aren't averaged into a
+forecast. **Days left** and the chart's projection to empty are on hand divided by
+that. The feed's page shows a rate's run of daily
 feedings as one ledger row.
 
 ## 7. Index

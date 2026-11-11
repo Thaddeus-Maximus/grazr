@@ -264,7 +264,10 @@ const grazr = (() => {
         return hit.map((h, i) => i ? esc(h.id) : `<a class="link paddocks" href="${pageUrl(h.id)}">${esc(h.id)}</a>`).join(" · ");
       };
       map.grazrLocate.refresh && map.grazrLocate.refresh();
-      const target = focus ? pads.filter((f) => f.properties.id === focus) : pads;
+      // fit to the focused paddock; or with `active`, the ones herds are on now (all if none)
+      const active = pads.filter((f) => f.properties.herds.length);
+      const target = focus ? pads.filter((f) => f.properties.id === focus)
+        : opts.active && active.length ? active : pads;
       if (target.length && !opts.keepView) {
         map.fitBounds(L.geoJSON({type: "FeatureCollection", features: target}).getBounds(), {padding: [20, 20], maxZoom: 19});
       }
@@ -1029,7 +1032,39 @@ const grazr = (() => {
     });
   }
 
+  /* The when picker (`when_input` macro): quick picks, and a hint saying what blanks mean. */
+  function whenPicker(el) {
+    const date = el.querySelector("input[type=date]"), time = el.querySelector("input[type=time]");
+    const hint = el.querySelector("[data-when-hint]");
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const day = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+    const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+    const sync = () => {
+      const d = date.value, t = time.value;
+      const isToday = d && day(d).getTime() === today().getTime();
+      const label = d && !isToday ? shortDate(day(d).getTime(), day(d).getFullYear() !== today().getFullYear()) : "today";
+      hint.textContent = !d && !t ? "blank = now" : !t ? `${label}, at the current time` : !d ? `today at ${t}` : "";
+    };
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-when-set]");
+      if (!b) return;
+      const how = b.dataset.whenSet;
+      if (how === "now") { date.value = ""; time.value = ""; }
+      else {
+        const d = how === "yesterday" || !date.value ? today() : day(date.value);
+        d.setDate(d.getDate() - 1);
+        date.value = iso(d);
+      }
+      sync();
+      date.dispatchEvent(new Event("change", {bubbles: true}));
+    });
+    el.addEventListener("input", sync);
+    el.addEventListener("change", sync);
+    sync();
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("[data-when]").forEach(whenPicker);
     document.querySelectorAll(".tl-filter").forEach(timelineFilter);
     document.querySelectorAll("table[data-sortable]").forEach(sortableTable);
     document.querySelectorAll("table[data-sortable]").forEach(rememberList);

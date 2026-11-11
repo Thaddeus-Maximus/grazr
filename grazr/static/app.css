@@ -288,3 +288,8 @@ th.sortable.desc::after { content: " \25BC"; }
 .chart .cursor { stroke: var(--ink); opacity: .4; }
 .chart .cursor-dot { fill: #2f6b3a; stroke: #fff; stroke-width: 2; }
 .chart-read { min-height: 1.5em; margin-bottom: .2rem; }
+
+/* the when picker: date, optional time, quick picks */
+.when-pick { display: inline-flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.when-pick .chips { margin: 0; }
+.when-pick input[type=date] { min-width: 9.5rem; }

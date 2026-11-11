@@ -49,3 +49,14 @@
 {# Moves the file to .trash/ (Obsidian's trash), after asking. #}
 {% macro delete_form(path) %}<form id="delete" method="post" action="/delete/{{ path|q }}" hidden
   data-confirm="Delete {{ path }}? It goes to the .trash folder, so it can be got back. Links to it will stop working."></form>{% endmacro %}
+
+{# When something happened: a date and an optional time, with quick picks. Both blank is
+   now; a date with no time takes the current time of day; a time with no date is today. #}
+{% macro when_input(date="", time="", id="when") %}
+<span class="when-pick" data-when>
+  <input type="date" id="{{ id }}" name="when_date" value="{{ date }}" max="{{ now().date().isoformat() }}" aria-label="date">
+  <input type="time" name="when_time" value="{{ time }}" aria-label="time (optional)">
+  <span class="chips"><button type="button" data-when-set="now">Now</button><button type="button" data-when-set="yesterday">Yesterday</button><button type="button" data-when-set="-1" title="one day earlier">−1 day</button></span>
+  <span class="muted small" data-when-hint>blank = now</span>
+</span>
+{% endmacro %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import map_head %}
+{% from "_macros.html" import map_head, when_input %}
 {% block title %}Move a herd{% endblock %}
 {% block head %}{{ map_head() }}{% endblock %}
 {% block main %}
@@ -26,7 +26,7 @@
       <span><b>Extend</b> <code>+&gt;</code>: keep current paddocks open too (back-grazing)</span></label>
 
     <label for="when">When</label>
-    <input id="when" name="when" type="datetime-local"> <span class="muted small">blank = now</span>
+    {{ when_input() }}
     <label for="comment">Comment</label>
     <input id="comment" name="comment" style="width:100%" placeholder="front fence moved, back fence left open">
 

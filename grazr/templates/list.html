@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import elink %}
+{% from "_macros.html" import elink, when_input %}
 {% block title %}{{ etype|capitalize }}{% endblock %}
 {% block main %}
 <div class="titlebar">
@@ -80,7 +80,7 @@
   Move checked to <input name="dest" list="herdlist" placeholder="herd" required>
   <datalist id="herdlist">{% for h in app.farm.entities("herds") %}<option value="{{ h.id }}">{% endfor %}</datalist>
   <label class="row" style="margin:0;font-weight:normal"><input type="checkbox" name="create" value="1"> create it if new</label>
-  <input name="when" type="datetime-local" title="when (blank = now)">
+  {{ when_input(id="move-when") }}
   <button class="primary">Move</button>
 </div>
 {% endif %}

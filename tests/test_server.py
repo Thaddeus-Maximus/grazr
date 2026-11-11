@@ -118,13 +118,20 @@ def test_create_and_edit_animal(web, farm, farm_root):
     assert "color: brown" in text and "sex:" not in text and text.endswith("Body written in Obsidian.\n")
 
 
-def test_draw_paddock_and_grazed_shape_is_refused(web, farm):
+def test_draw_paddock_and_redraw_a_grazed_one(web, farm):
     pts = [[40.3497, -89.1307], [40.3497, -89.1304], [40.3493, -89.1304]]
     status, _, body = web("/draw", {"name": "P4", "parent": "South Field", "perimeter": json.dumps(pts)})
     assert status == 303, body
     assert farm.entity("P4")["parent"] == "South Field" and farm.entity("P4")["acres"] > 0
+    assert farm.q1("SELECT 1 FROM occupancies WHERE paddock='P3'")
+    # a new drawing can't take a paddock's name
     status, _, body = web("/draw", {"name": "P3", "perimeter": json.dumps(pts)})
-    assert status == 400 and "new name" in body
+    assert status == 400 and "Edit shape" in body
+    # but P3's own Edit shape redraws it in place, grazed or not (D-22)
+    assert "all of its" in web("/draw?id=P3")[2]
+    status, _, body = web("/draw", {"name": "P3", "editing": "P3", "copy_from": "P3", "perimeter": json.dumps(pts)})
+    assert status == 303, body
+    assert json.loads(farm.entity("P3")["polygon"]) == pts and farm.q1("SELECT 1 FROM occupancies WHERE paddock='P3'")
 
 
 def test_upload_multipart(web, farm_root):
@@ -172,6 +179,30 @@ def test_backdated_move_and_bad_when(web, farm_root):
     assert (farm_root / "notes" / "2026May01-0730.md").read_text(encoding="utf-8") == "[[Hogs]] -> [[P3]]\n"
     assert web("/new", {"text": "x", "when": "the day after the storm"})[0] == 400
     assert web("/new", {"text": "x", "when": "2099-01-01"})[0] == 400
+
+
+def test_when_picker_date_and_optional_time(web, farm, farm_root):
+    from datetime import datetime
+    status, h, body = web("/move", {"herd": "Hogs", "paddock": ["P3"], "arrow": "->",
+                                    "when_date": "2026-05-01", "when_time": "07:30"})
+    assert status == 303, body
+    assert (farm_root / "notes" / "2026May01-0730.md").is_file()
+    # a date with no time takes the current time of day, not approximate
+    before = datetime.now()
+    status, h, body = web("/new", {"text": "sheared [[orange-117]]", "when_date": "2026-03-02", "when_time": ""})
+    assert status == 303, body
+    path = urllib.parse.unquote(h["Location"][3:])
+    row = farm.q1("SELECT ts, approx FROM entries WHERE path=?", path)
+    assert row["ts"][:10] == "2026-03-02" and row["approx"] == 0
+    assert row["ts"][11:] in {f"{before:%H:%M}", f"{datetime.now():%H:%M}"}
+    assert not (farm_root / path).read_text(encoding="utf-8").startswith("Date:")
+    # a future day is refused; both blank is now
+    assert web("/new", {"text": "x", "when_date": "2099-01-01", "when_time": ""})[0] == 400
+    status, h, _ = web("/new", {"text": "y", "when_date": "", "when_time": ""})
+    assert status == 303
+    # the page prefills the picker from ?when=
+    page = web("/new?when=2025-12-15%2008:00")[2]
+    assert 'value="2025-12-15"' in page and 'value="08:00"' in page
 
 
 def test_eartag_links(web):
@@ -335,7 +366,8 @@ def test_feed_inventory_and_usage(web, farm, farm_root):
         ("count", 400, 400), ("use", 20, 380), ("buy", 10, 390)]
     assert ledger[1]["herds"] == ["Ewe Herd"]
     st = farm.feed_status("Corn screenings", now=datetime(2026, 10, 10))
-    assert st["on_hand"] == 390 and round(st["per_day"], 2) == 3.33 and round(st["days_left"]) == 117
+    # one-off feedings aren't a forecast: no daily rate, so no per day or days left
+    assert st["on_hand"] == 390 and st["per_day"] is None and st["days_left"] is None
     codes = {w["code"]: w for w in farm.warnings(include_info=True) if w["path"] == "notes/Feed log.md"}
     assert "scoop" in codes["feed-unit"]["message"]                     # unknown measure: say how to fix
     fix = json.loads(codes["unlinked-feed"]["fix"])
