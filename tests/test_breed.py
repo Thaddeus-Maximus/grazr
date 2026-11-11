@@ -41,6 +41,9 @@ def test_breed_from_dam_and_sire(web, farm, farm_root):
         ("St. Croix", .25), ("Dorper", .125), ("Katahdin", .125), (None, .5)]
     page = web("/a/orange-010")[2]
     assert "from dam and sire" in page and 'class="breedbar"' in page and "unknown <b>50%</b>" in page
+    # segments go in breed order, not by size: Dorper, Katahdin, St. Croix, unknown
+    bar = page.split('class="breedbar"')[1].split("</div>")[0]
+    assert bar.split('aria-label="')[1].split('"')[0] == "Dorper 12.5%, Katahdin 12.5%, St. Croix 25%, unknown 50%"
     page = web("/animals?cols=breed")[2]
     assert 'class="breedbar small"' in page and "St. Croix 25%" in page
     # a default column, with a colour key naming the breeds in view

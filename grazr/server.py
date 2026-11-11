@@ -54,7 +54,8 @@ class App:
                                autoescape=select_autoescape(["html"]), trim_blocks=True,
                                lstrip_blocks=True, extensions=["jinja2.ext.do"])
         self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, pedigree_only=pedigree_only,
-                                static=self.static_url, breed_class=self.breed_class)
+                                static=self.static_url, breed_class=self.breed_class,
+                                breed_order=self.breed_order)
         self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype, elabel=self.elabel,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
@@ -116,6 +117,13 @@ class App:
         if name is None:
             return "bc-u"
         return f"bc-{colors.get(key(name), 0) % cls.BREED_COLORS}"
+
+    @staticmethod
+    def breed_order(mix, colors: dict) -> list:
+        """A mix in the farm's breed order (alphabetical, unknown last), so every bar and
+        legend lists the breeds the same way whatever their shares."""
+        return sorted(mix, key=lambda p: (p[0] is None, colors.get(key(p[0]), len(colors)) if p[0] else 0,
+                                          key(p[0] or "")))
 
     @staticmethod
     def fence(row) -> str:
