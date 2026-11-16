@@ -28,7 +28,6 @@
 {% set shown_filters = [] %}
 {% if query.series %}{% do shown_filters.append("series " ~ query.series) %}{% endif %}
 {% for k, v in filters.items() %}{% do shown_filters.append(k ~ " " ~ ("has a value" if v == "*" else "is empty" if v == "!" else "= " ~ v)) %}{% endfor %}
-{% if etype == "animals" and not show_all %}{% do shown_filters.append("live animals only") %}{% endif %}
 {% if etype == "herds" and show_all %}{% do shown_filters.append("including idle herds") %}{% endif %}
 {% if shown_filters %}<p class="print-only muted small" style="margin:-.4rem 0 .6rem">{{ shown_filters|join(" · ") }}</p>{% endif %}
 <form class="row panel no-print" method="get" style="margin-bottom:1rem">
