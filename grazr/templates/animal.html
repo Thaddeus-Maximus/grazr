@@ -12,7 +12,7 @@
 {% endmacro %}
 {% block main %}
 {% set f = props %}
-{% set shown = dict(props) %}{% if breed and breed.own %}{% do shown.pop("breed") %}{% endif %}
+{% set shown = dict(props) %}{% do shown.pop("born", None) if e.born %}{% if breed and breed.own %}{% do shown.pop("breed") %}{% endif %}
 <div class="titlebar">
   <h1>{{ e.id }}</h1>
   {% if f.name %}<span class="muted">{{ f.name }}</span>{% endif %}
@@ -38,7 +38,7 @@
         {%- if exit.weight %} · {{ "%g"|format(exit.weight) }} {{ exit.unit }}{% if exit.basis %} {{ exit.basis }}{% endif %}{% endif %}
         {%- if exit.cause %} · {{ exit.cause|inline }}{% endif %}
         <a class="src" href="/n/{{ exit.path|q }}#L{{ exit.line }}">source</a></p>{% endif %}
-      {% if e.born %}<p>Born {{ e.born }}{% if e.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet", 4: "quad"}.get(e.birth_type, e.birth_type ~ "-birth") }}{% endif %}</p>{% endif %}
+      {% if e.born %}<p>Born {{ e.born|day }}{% if e.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet", 4: "quad"}.get(e.birth_type, e.birth_type ~ "-birth") }}{% endif %}</p>{% endif %}
       {% if breed %}
       <div class="breed"><span class="muted small">Breed{% if not breed.own %}, from dam and sire{% endif %}</span>
         {{ breed_bar(breed.mix, breed_colors) }}</div>
@@ -59,7 +59,7 @@
       {% for y in lambing %}
       <tr><td>{{ y.year }}</td><td>
         {% for l in y.lambs %}
-        <div>{{ elink(l.id) }} <span class="muted small">{{ l.born }} · {{ l.sex or "?" }}{% if l.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet"}.get(l.birth_type, l.birth_type) }}{% endif %}</span>
+        <div>{{ elink(l.id) }} <span class="muted small">{{ l.born|day }} · {{ l.sex or "?" }}{% if l.birth_type %} · {{ {1: "single", 2: "twin", 3: "triplet"}.get(l.birth_type, l.birth_type) }}{% endif %}</span>
           {% if not l.active %}<span class="badge left">gone</span>{% endif %}</div>
         {% endfor %}
       </td></tr>

@@ -489,3 +489,10 @@ def test_backup_export_and_import(web, farm_root):
     status, _, page = web("/backup/import", raw=body.replace(data, b"junk"),
                           ctype=f"multipart/form-data; boundary={boundary}")
     assert status == 400 and "not a zip" in page
+
+
+def test_animals_herd_column_optional(web):
+    page = web("/animals")[2]          # on by default, links the herd
+    assert 'data-key="f:herd"' in page and "/h/Ewe%20Herd" in page
+    page = web("/animals?cols=name")[2]   # and can be unticked
+    assert 'data-key="f:herd"' not in page and 'value="herd"' in page

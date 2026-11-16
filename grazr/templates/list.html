@@ -1,6 +1,22 @@
 {% extends "base.html" %}
 {% from "_macros.html" import elink, when_input, breed_bar %}
 {% block title %}{{ etype|capitalize }}{% endblock %}
+{% block head %}
+<script>
+// columns are remembered in this browser, per list: a URL that names them saves them,
+// one that doesn't (a nav link, "clear") gets the saved ones back
+(() => {
+  const store = "grazr.cols.{{ etype }}", url = new URL(location.href);
+  try {
+    if (url.searchParams.has("cols")) localStorage.setItem(store, url.searchParams.get("cols"));
+    else {
+      const saved = localStorage.getItem(store);
+      if (saved !== null) { url.searchParams.set("cols", saved); location.replace(url); }
+    }
+  } catch (e) { /* storage blocked: the default columns */ }
+})();
+</script>
+{% endblock %}
 {% block main %}
 <div class="titlebar">
   <h1>{{ etype|capitalize }}</h1><span class="muted">{{ rows|length }} shown</span>
@@ -57,7 +73,7 @@
   <thead><tr>
     {% if etype == "animals" %}<th class="pick"><input type="checkbox" data-check-all="input[name=animal]"></th>{% endif %}
     <th data-key="id">ID</th>
-    {% if etype == "animals" %}<th data-key="herd">Herd</th>{% elif etype == "herds" %}<th data-key="size">Size</th><th data-key="on">On</th>
+    {% if etype == "herds" %}<th data-key="size">Size</th><th data-key="on">On</th>
     {%- elif etype == "feeds" %}<th data-key="onhand">On hand</th><th data-key="perday">Per day</th><th data-key="daysleft">Days left</th><th data-key="used30">Used, 30 days</th>
     {%- elif etype == "paddocks" %}<th data-key="acres">Acres</th><th data-key="perimeter">Perimeter</th><th data-key="rested">Rested</th><th data-key="herds">Herds</th>{% endif %}
     {% for c in cols %}<th data-key="f:{{ c }}">{{ c }}</th>{% endfor %}
@@ -68,8 +84,7 @@
     {% if etype == "animals" %}<td class="pick"><input type="checkbox" name="animal" value="{{ r.id }}"></td>{% endif %}
     <td data-sort="{{ r.id }}">{{ elink(r.id) }}{% if etype == "animals" and pedigree_only(r) %} <span class="badge via">pedigree only</span>
       {%- elif gone(r) %} <span class="badge left">{{ x.exit.kind if x.exit else "left" }}</span>{% endif %}</td>
-    {% if etype == "animals" %}<td>{% if x.herd %}{{ elink(x.herd) }}{% endif %}</td>
-    {% elif etype == "herds" %}<td>{{ x.size if x.size is not none else "" }}{% if r.anonymous %} head{% endif %}</td>
+    {% if etype == "herds" %}<td>{{ x.size if x.size is not none else "" }}{% if r.anonymous %} head{% endif %}</td>
       <td>{% for p in x.paddocks %}{{ elink(p) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
     {% elif etype == "feeds" %}<td data-sort="{{ x.on_hand if x.on_hand is not none else '' }}">{{ x.on_hand|lb(x.sizes) if x.on_hand is not none else "" }}</td>
       <td data-sort="{{ x.per_day or '' }}">{{ x.per_day|lb if x.per_day else "" }}</td>
@@ -79,9 +94,12 @@
       <td data-sort="{{ x.rest if r.acres and x.rest is not none else '' }}">{{ x.rest|days if r.acres else "" }}</td>
       <td>{% for h in x.herds %}{{ elink(h) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>{% endif %}
     {% for c in cols %}{% set v = f.get(c) %}
-    {% if c == "breed" and etype == "animals" %}{% set b = x.breed %}
+    {% if c == "herd" and etype == "animals" %}
+    <td data-sort="{{ x.herd or '' }}">{% if x.herd %}{{ elink(x.herd) }}{% endif %}</td>
+    {% elif c == "breed" and etype == "animals" %}{% set b = x.breed %}
     <td data-sort="{{ b.mix[0][0] or '' if b else '' }}">{% if b %}{{ breed_bar(b.mix, breed_colors, small=True) }}{% endif %}</td>
-    {% else %}<td{% if c == "born" and r.born %} data-sort="{{ r.born }}"{% endif %}>
+    {% elif c == "born" and r.born %}<td data-sort="{{ r.born }}">{{ r.born|day }}</td>
+    {% else %}<td>
       {%- if v is string %}{{ v|inline }}{% elif v is not none %}{{ v }}{% endif %}</td>{% endif %}{% endfor %}
   </tr>
   {% endfor %}

@@ -8,7 +8,7 @@ import re
 import threading
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -56,7 +56,7 @@ class App:
         self.env.globals.update(app=self, fields=fields, now=datetime.now, gone=gone, pedigree_only=pedigree_only,
                                 static=self.static_url, breed_class=self.breed_class,
                                 breed_order=self.breed_order)
-        self.env.filters.update(ts=self.fmt_ts, days=self.fmt_days, eurl=self.eurl, etype=self.etype, elabel=self.elabel,
+        self.env.filters.update(ts=self.fmt_ts, day=self.fmt_day, days=self.fmt_days, eurl=self.eurl, etype=self.etype, elabel=self.elabel,
                                 inline=lambda t: self.renderer().inline(t or ""),
                                 acres=lambda a: "" if a is None else f"{a:.2f}",
                                 fence=self.fence, lb=self.fmt_lb, pct=self.fmt_pct,
@@ -187,6 +187,23 @@ class App:
         out = dt.strftime("%d %b %Y") if approx and dt.hour == 12 and dt.minute == 0 \
             else dt.strftime("%d %b %Y %H:%M")
         return ("~" if approx else "") + out
+
+    @staticmethod
+    def fmt_day(v) -> str:
+        """A calendar date as 2025-APR-19, whatever form it was written in; unreadable text as is."""
+        if v is None or v == "":
+            return ""
+        d = v
+        if isinstance(v, str):
+            from . import dates
+            got = dates.parse_when(v, None)
+            if got is None:
+                return v
+            d = got.dt
+        if isinstance(d, (date, datetime)):
+            mon = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()[d.month - 1]
+            return f"{d.year:04d}-{mon}-{d.day:02d}"
+        return str(v)
 
     @staticmethod
     def fmt_span(d: float) -> str:
@@ -447,19 +464,19 @@ class App:
                     break
             if ok:
                 out.append(r)
-        default_cols = {"animals": ["name", "sex", "born", "breed"], "herds": ["species"],
+        default_cols = {"animals": ["herd", "name", "sex", "born", "breed"], "herds": ["species"],
                         "paddocks": ["kind", "forage"]}.get(etype, [])
         # `cols` from the form, even empty (every column unticked); defaults otherwise
         names = f.field_names(etype)
-        if etype == "animals" and "breed" not in names:     # can be inherited with no field set
-            names = sorted(names + ["breed"], key=str.casefold)
+        if etype == "animals":     # herd comes from moves, breed can be inherited: no field needed
+            names = sorted(set(names) | {"herd", "breed"}, key=str.casefold)
         cols = [c for c in query["cols"].split(",") if c] if "cols" in query else \
             [c for c in default_cols if c in names]
         rest = f.rest() if etype == "paddocks" else None
         extra = {}
         for r in out:
             if etype == "animals":
-                m = f.membership(r["id"])
+                m = f.membership(r["id"]) if "herd" in cols else None
                 extra[r["id"]] = {"herd": m["herd"] if m else None, "exit": f.exit(r["id"])}
             elif etype == "herds":
                 extra[r["id"]] = {"size": f.herd_size(r),
