@@ -328,6 +328,9 @@ th.sortable.desc::after { content: " \25BC"; }
   a { color: inherit; }
   tr, li, .panel { break-inside: avoid; }
   thead { display: table-header-group; }   /* repeat column headings on each page */
+  /* tables only as wide as their content, on the left: the right margin stays free for notes */
+  table { width: auto; }
+  th, td { padding: .15rem 1.2rem .15rem 0; }
   th.sortable::after { content: none; }
   .breedbar, .breedbar span, .breedlegend i, .eartag, a.link.animals.eartag::before, .badge,
   .lintcount, .stats > div, .chart * {
