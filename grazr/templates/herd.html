@@ -19,7 +19,7 @@
 
     {% if e.anonymous %}
     <h2>Head count</h2>
-    <form method="post" action="/new" class="row">
+    <form method="post" action="/new" class="row no-print">
       <input type="hidden" name="next" value="/h/{{ e.id|q }}">
       <input name="text" placeholder="[[{{ e.id }}]] = 12   or   [[{{ e.id }}]] -1 died" size="34" value="[[{{ e.id }}]] ">
       <button>Record</button>
@@ -33,14 +33,14 @@
     <form method="post" action="/move-animals">
       <input type="hidden" name="next" value="/h/{{ e.id|q }}">
       <table>
-        <tr><th><input type="checkbox" data-check-all="input[name=animal]" title="all"></th><th>Animal</th><th>Name</th><th>Sex</th><th>Since</th></tr>
+        <tr><th class="pick"><input type="checkbox" data-check-all="input[name=animal]" title="all"></th><th>Animal</th><th>Name</th><th>Sex</th><th>Since</th></tr>
         {% for a in members %}{% set af = fields(a) %}
-        <tr><td><input type="checkbox" name="animal" value="{{ a.id }}"></td><td>{{ elink(a.id) }}</td>
+        <tr><td class="pick"><input type="checkbox" name="animal" value="{{ a.id }}"></td><td>{{ elink(a.id) }}</td>
             <td>{{ af.name or "" }}</td><td>{{ af.sex or "" }}</td>
             <td class="small">{{ a.joined|ts }}{% if a.inherited %} <span class="badge via">with dam</span>{% endif %}</td></tr>
         {% endfor %}
       </table>
-      <div class="row" style="margin-top:.6rem">
+      <div class="row no-print" style="margin-top:.6rem">
         Move checked to
         <input name="dest" list="herdlist" placeholder="herd" required>
         <datalist id="herdlist">{% for h in herds %}<option value="{{ h }}">{% endfor %}</datalist>

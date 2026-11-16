@@ -22,7 +22,7 @@
   <div><span class="muted small">Used, last 30 days</span><b>{{ st.used_30|lb(sizes) }}</b></div>
 </div>
 
-<form method="post" action="/feed/{{ e.id|q }}" class="panel row" style="margin:1rem 0">
+<form method="post" action="/feed/{{ e.id|q }}" class="panel row no-print" style="margin:1rem 0">
   <select name="kind">
     <option value="use">Fed</option><option value="rate">Feeding daily</option><option value="stop">Stopped feeding</option>
     <option value="buy">Bought</option><option value="count">On hand now</option>
